@@ -17,9 +17,31 @@ import networkx as nx
 sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
 from neural.path_network import PathNetwork
 
+EXTRA_OPERATIONAL_WAY_TAGS = [
+    "shoulder", "shoulder:both", "shoulder:left", "shoulder:right",
+    "emergency", "motor_vehicle", "vehicle",
+    "maxweight", "maxheight", "maxwidth", "width", "incline", "bridge",
+]
+EXTRA_OPERATIONAL_NODE_TAGS = ["highway", "traffic_calming"]
+
 def get_city_graph(city_name: str):
     print(f"  Carregando mapa de {city_name}...")
-    return ox.graph_from_place(city_name, network_type="drive")
+
+    # OSMnx only preserves a curated set of way tags by default. Critical
+    # routing needs to know whether a mapped road explicitly describes a
+    # shoulder or emergency access, so retain those tags when downloading.
+    for tag in EXTRA_OPERATIONAL_WAY_TAGS:
+        if tag not in ox.settings.useful_tags_way:
+            ox.settings.useful_tags_way.append(tag)
+
+    for tag in EXTRA_OPERATIONAL_NODE_TAGS:
+        if tag not in ox.settings.useful_tags_node:
+            ox.settings.useful_tags_node.append(tag)
+
+    # Preserva semáforos e lombadas mesmo no meio de ruas sem entroncamento.
+    # As features numéricas da rede continuam exatamente as mesmas.
+    graph = ox.graph_from_place(city_name, network_type="drive", simplify=False)
+    return ox.simplify_graph(graph, node_attrs_include=EXTRA_OPERATIONAL_NODE_TAGS)
 
 def edge_between(graph, u, v, weight: str) -> dict:
     """
@@ -145,7 +167,17 @@ def apply_neural_weights(
 
     model.eval()
     with torch.no_grad():
-        preds_n = model(node_feats_n, edge_index, edge_feats_n)  # [E, 1]
+        preds_n, attention = model(node_feats_n, edge_index, edge_feats_n, return_attention=True)
+
+    # GAT adds self-loops; associate returned weights by directed endpoints,
+    # not by the edge position. Parallel edges share the same node features.
+    attention_by_round = []
+    for indices, weights in attention:
+        means = weights.mean(dim=1).tolist()
+        attention_by_round.append({
+            (int(source), int(target)): float(value)
+            for (source, target), value in zip(indices.t().tolist(), means)
+        })
 
     # Desnormaliza
     preds = preds_n * y_std + y_mean   # [E, 1]
@@ -154,6 +186,9 @@ def apply_neural_weights(
     for e_idx, (u, v, key) in enumerate(key_list):
         cost = max(float(preds[e_idx].item()), 0.1)
         graph[u][v][key]["neural_cost"] = cost
+        pair = (int(edge_index[0, e_idx]), int(edge_index[1, e_idx]))
+        for layer, values in enumerate(attention_by_round, 1):
+            graph[u][v][key][f"attention_{layer}"] = values.get(pair)
 
 def find_best_path(graph, origin_coords: tuple, dest_coords: tuple) -> dict:
     origin_node = ox.nearest_nodes(graph, origin_coords[1], origin_coords[0])
