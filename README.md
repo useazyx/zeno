@@ -88,6 +88,27 @@ Coordinates more than 2 km away from the mapped streets are refused. Without tha
 pointing to another state would still snap to some corner of Taubaté and return a confident,
 meaningless route.
 
+## The console
+
+- **Panel** (`/`): live map of open incidents and vehicles. Critical alerts show over every page.
+- **Incidents** (`/ocorrencias`): address search, a timeline with operator notes, vehicles ranked by
+  the arrival time the AI predicts, nearby hospitals and water sources, a replay of the response
+  and a printable report.
+- **Routes** (`/rotas`): turn-by-turn guidance, street closures, the search trace of the
+  bidirectional Dijkstra, and the same trip on the public OSRM server for comparison.
+- **Coverage** (`/cobertura`): response-time isochrones of each station and how much of the recent
+  demand they reach.
+- **Neural network** (`/rede-neural`): training progress, attention weights and the learned cost of
+  every street drawn on the map.
+- **Garage** (`/garagem`): 3D view of each vehicle. **Water sources** (`/hidrantes`): hydrants,
+  cisterns and intake points.
+- **Wallboard** (`/telao`) and **vehicle terminal** (`/terminal/:vehicleId`) run full screen,
+  outside the main layout.
+
+Vehicle positions are stored over time. During a dispatch, a background monitor raises an alert
+when a vehicle loses signal or stays stopped away from the incident. OpenStreetMap has no hydrants mapped in Taubaté, so `npm run seed:water-sources`
+writes 42 demo hydrants on real intersections of main roads, flagged as a demo scenario.
+
 ## Running it
 
 **Database and backend**
@@ -95,10 +116,12 @@ meaningless route.
 ```bash
 cd backend
 npm install
+cp .env.example .env          # then point DATABASE_URL at an existing PostgreSQL database
 npx prisma migrate deploy
 npx prisma generate
 npx prisma db seed            # unit hierarchy
 npm run seed:occurrences      # optional: a year of incidents for the statistics screen
+npm run seed:water-sources    # optional: demo hydrants
 npm run dev                   # http://localhost:3333/api/v1
 ```
 
@@ -128,18 +151,36 @@ npm run dev                   # http://localhost:5173
 cd backend
 npm test            # unit tests (Jest), Prisma and the AI client are mocked
 npm run test:e2e    # end-to-end against the real stack: CRUDs, dispatch lifecycle, WebSocket, AI bridge
+
+cd machine
+poetry run pytest -q   # route engine on a synthetic city, no map download
+
+cd frontend
+npm test            # manoeuvre language, timeline, palette, coverage
+npm run test:e2e    # Playwright at 1440 px and 360 px, with the stack running
 ```
+
+GitHub Actions (`.github/workflows/ci.yml`) runs the backend, frontend and AI suites on every push.
 
 ## API overview
 
 | Resource | |
 |---|---|
 | `/units` | self-referencing unit hierarchy |
+| `GET /units/areas` | area each station reaches first, by response time (not official jurisdiction) |
 | `/firefighters`, `/vehicles`, `/crews`, `/shifts` | personnel and fleet |
+| `/vehicles/positions`, `/vehicles/:id/positions` | stored vehicle positions |
 | `/occurrences` | incidents |
+| `/occurrences/:id/timeline`, `POST /occurrences/:id/notes` | incident timeline and operator notes |
+| `POST /occurrences/:id/recommendations` | available vehicles ranked by predicted arrival time |
+| `/occurrences/:id/hospitals`, `/occurrences/:id/water-sources` | hospitals by travel time and nearest water sources |
 | `/dispatches` | vehicle dispatched to an incident |
-| `/ai/routes`, `/ai/model`, `/ai/training` | bridge to the AI service |
-| `GET /realtime` | WebSocket: `occurrence.created/updated`, `dispatch.created/updated`, `vehicle.moved` |
+| `/water-sources` | hydrants, cisterns and intake points |
+| `/ai/routes`, `/ai/model`, `/ai/training` | bridge to the AI service (`/ai/routes` accepts `closures`) |
+| `POST /ai/coverage`, `GET /ai/edge-costs`, `GET /ai/eta-accuracy` | isochrones, learned street costs, predicted vs. reported arrival |
+| `/geo/search`, `/geo/reverse`, `/geo/weather` | address search (Photon/OSM) and weather (Open-Meteo), no API key |
+| `/geo/reference-route` | the same trip on the public OSRM server |
+| `GET /realtime` | WebSocket: `occurrence.created/updated`, `occurrence.timeline`, `dispatch.created/updated`, `vehicle.moved` |
 
 ## Team
 
