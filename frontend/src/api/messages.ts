@@ -29,7 +29,7 @@ const RULES: Rule[] = [
     rewrite: ([, side, distance, city]) => {
       const what = side === "origin" ? "A origem" : "O destino"
       return `${what} está a ${METRES(distance)} da rua mapeada mais próxima, fora da malha viária de ${city}. `
-        + "A rede neural só conhece as ruas dessa malha — confira as coordenadas ou escolha um ponto dentro da área destacada no mapa."
+        + "A IA opera apenas sobre as ruas dessa malha — confira as coordenadas ou escolha um ponto dentro da área destacada no mapa."
     },
   },
   {

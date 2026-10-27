@@ -15,7 +15,7 @@
 import type {
   CrewRole, DispatchStatus, FirefighterStatus, OccurrenceNature, OccurrencePriority,
   OccurrenceStatus, Rank, ShiftType, TrainingStatus, UnitType,
-  VehicleStatus, VehicleType,
+  VehicleStatus, VehicleType, WaterSourceStatus, WaterSourceType,
 } from "./types"
 
 /** Every status chip in the system is one of these. */
@@ -227,4 +227,24 @@ export const TRAINING_STATUS_TONE: Record<TrainingStatus, string> = {
 /** Turns a `Record<K, string>` into the option list a <select> expects. */
 export function optionsOf<K extends string>(labels: Record<K, string>): { value: K, label: string }[] {
   return (Object.keys(labels) as K[]).map((value) => ({ value, label: labels[value] }))
+}
+
+export const WATER_TYPE_LABEL: Record<WaterSourceType, string> = {
+  HIDRANTE_COLUNA: "Hidrante de coluna",
+  HIDRANTE_SUBTERRANEO: "Hidrante subterrâneo",
+  CISTERNA: "Cisterna",
+  RESERVATORIO: "Reservatório",
+  PONTO_CAPTACAO: "Ponto de captação",
+}
+
+export const WATER_STATUS_LABEL: Record<WaterSourceStatus, string> = {
+  OPERANTE: "Operante",
+  INOPERANTE: "Inoperante",
+  NAO_VERIFICADO: "Não verificado",
+}
+
+export const WATER_STATUS_TONE: Record<WaterSourceStatus, string> = {
+  OPERANTE: TONE.ok,
+  INOPERANTE: TONE.alert,
+  NAO_VERIFICADO: TONE.warn,
 }
