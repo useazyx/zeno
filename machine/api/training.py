@@ -168,12 +168,22 @@ class TrainingManager:
         except ValueError:
             return
 
+        learning_rate = None
+        if len(parts) >= 5:
+            try:
+                value = float(parts[4])
+                if value > 0 and value < float("inf"):
+                    learning_rate = value
+            except ValueError:
+                pass
+
         job.history.append(
             {
                 "epoch": job.current_epoch,
                 "train_loss": job.train_loss,
                 "validation_loss": job.validation_loss,
                 "best_validation_loss": job.best_validation_loss,
+                "learning_rate": learning_rate,
             }
         )
 
