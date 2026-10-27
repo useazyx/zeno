@@ -9,7 +9,8 @@ export class CreateDispatchController {
     const dispatchSchema = z.object({
       occurrence_id: z.uuid({ error: "The occurrence_id must be a valid uuid" }),
       vehicle_id: z.uuid({ error: "The vehicle_id must be a valid uuid" }),
-      crew_id: z.uuid({ error: "The crew_id must be a valid uuid" }).optional()
+      crew_id: z.uuid({ error: "The crew_id must be a valid uuid" }).optional(),
+      critical_mode: z.boolean().optional().default(false)
     })
 
     try {
