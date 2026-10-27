@@ -3,28 +3,7 @@
 @import "shadcn/tailwind.css";
 @import "@fontsource-variable/inter";
 
-/*
- * The palette of the dispatch console.
- *
- * The first version dressed the system in the corporation's own colours: a
- * cream page under a red-to-orange gradient bar, coral links, amber warnings
- * and a saturated hue for every status. It looked like the fire department's
- * letterhead rather than the equipment it runs on, and — worse for a screen
- * read under pressure — colour was everywhere, so colour meant nothing.
- *
- * What replaces it is the language of instrumentation: a graphite chrome, a
- * cool grey workspace, white panels, and a single steel blue for anything the
- * operator can act on. Red is not the corporation's colour here, it is the
- * severity channel — it appears only on a critical incident, a committed
- * vehicle or a failure, which is exactly when the eye should be pulled to it.
- *
- * Five hues carry meaning and nothing else does:
- *   accent  steel blue  — actions, links, live data, the neural route
- *   alert   deep red    — critical severity, failures, engaged vehicles
- *   warn    ochre       — something needs attention but is not an emergency
- *   ok      deep green  — available, closed, healthy
- *   info    teal        — a step in progress that is neither good nor bad
- */
+/* Cores de leitura e de preenchimento são separadas para manter o contraste. */
 @theme {
   --font-sans: "Inter Variable", ui-sans-serif, system-ui, "Segoe UI", sans-serif;
 
@@ -44,43 +23,46 @@
   --color-neutral-950: #060d18;
 
   /* Chrome — the dark bar the whole console hangs from. */
-  --color-chrome: #0F1720;
-  --color-chrome-soft: #1A2634;
-  --color-chrome-line: #2A3847;
-  --color-chrome-ink: #E8EEF4;
-  --color-chrome-muted: #93A5B7;
+  --color-chrome: #101923;
+  --color-chrome-soft: #192a38;
+  --color-chrome-line: #2b3c4c;
+  --color-chrome-ink: #e3ebf2;
+  --color-chrome-muted: #a5b6c5;
 
   /* Surfaces */
-  --color-canvas: #EDF1F5;
-  --color-surface: #FFFFFF;
-  --color-surface-muted: #F3F6F9;
+  --color-canvas: #0c141d;
+  --color-surface: #121e2a;
+  --color-surface-muted: #172633;
 
   /* Structure */
-  --color-line: #D6DEE6;
-  --color-line-strong: #B2BECB;
+  --color-line: #2b3c4c;
+  --color-line-strong: #4c6375;
 
   /* Text */
-  --color-ink: #0F1922;
-  --color-ink-muted: #55636F;
-  --color-ink-soft: #8496A5;
+  --color-ink: #e3ebf2;
+  --color-ink-muted: #a5b6c5;
+  --color-ink-soft: #91a4b6;
 
-  /* The one decorative colour: everything actionable. */
-  --color-accent: #0B63A5;
-  --color-accent-strong: #084D80;
-  --color-accent-soft: #E6EFF6;
+  --color-accent: #68b9e8;
+  --color-accent-strong: #a3d7f4;
+  --color-accent-soft: #1b3142;
+  --color-action: #186a9b;
+  --color-action-hover: #1c77ad;
+  --color-danger: #913f42;
+  --color-danger-hover: #a8494d;
 
   /* Severity and state. */
-  --color-alert: #A32A20;
-  --color-alert-strong: #7C1D16;
-  --color-alert-soft: #FAEDEB;
-  --color-warn: #8E600A;
-  --color-warn-soft: #FAF1DF;
-  --color-ok: #2F6A52;
-  --color-ok-soft: #E9F2EE;
-  --color-info: #0E6E75;
-  --color-info-soft: #E4F1F2;
-  --color-mute: #64748B;
-  --color-mute-soft: #EEF1F5;
+  --color-alert: #ef8c87;
+  --color-alert-strong: #ffb4ae;
+  --color-alert-soft: #332329;
+  --color-warn: #e6bd70;
+  --color-warn-soft: #332d21;
+  --color-ok: #7dc4a1;
+  --color-ok-soft: #1b302b;
+  --color-info: #80c6cb;
+  --color-info-soft: #1a3037;
+  --color-mute: #91a4b6;
+  --color-mute-soft: #1c2a37;
 }
 
 @layer base {
@@ -99,7 +81,14 @@
     background-color: var(--color-canvas);
     color: var(--color-ink);
     -webkit-font-smoothing: antialiased;
+    color-scheme: var(--app-color-scheme, dark);
+    line-height: 1.5;
+    scrollbar-color: var(--color-line-strong) var(--color-canvas);
   }
+
+  button:not(:disabled), select, summary { cursor: pointer; }
+
+  input, select, textarea { accent-color: var(--color-action); }
 
   /* Figures are read in columns — the times on the incident list, the counters
      on the panel — and a proportional digit makes those columns wobble. */
@@ -115,9 +104,78 @@
   }
 
   ::selection {
-    background-color: var(--color-accent);
+    background-color: var(--color-action);
     color: #fff;
   }
+}
+
+:root[data-theme="light"] {
+  --app-color-scheme: light;
+  --color-canvas: #eaf0f4;
+  --color-surface: #f8fafb;
+  --color-surface-muted: #e3eaf0;
+  --color-line: #c5d1db;
+  --color-line-strong: #8194a5;
+  --color-ink: #1c303f;
+  --color-ink-muted: #455c70;
+  --color-ink-soft: #50677a;
+  --color-accent: #155b85;
+  --color-accent-strong: #12496b;
+  --color-accent-soft: #dceaf3;
+  --color-action: #155f8e;
+  --color-action-hover: #104c72;
+  --color-danger: #923d40;
+  --color-danger-hover: #7c3235;
+  --color-alert: #973e3a;
+  --color-alert-strong: #80312e;
+  --color-alert-soft: #f4e3e1;
+  --color-warn: #75520c;
+  --color-warn-soft: #f1e8d3;
+  --color-ok: #256344;
+  --color-ok-soft: #deeee5;
+  --color-info: #235f68;
+  --color-info-soft: #dfedf0;
+  --color-mute: #50677a;
+  --color-mute-soft: #e3eaf0;
+}
+
+/* Chrome stays dark in both themes; its focus remains legible. */
+.bg-chrome {
+  --color-accent: #68b9e8;
+  --color-accent-strong: #a3d7f4;
+  --color-accent-soft: #1b3142;
+}
+.zeno-page { animation: workspace-enter 180ms ease-out both; }
+.zeno-dialog { animation: dialog-enter 160ms cubic-bezier(.2,.8,.2,1) both; }
+.zeno-popover { animation: dialog-enter 120ms ease-out both; }
+.zeno-backdrop { animation: backdrop-enter 120ms ease-out both; }
+@keyframes workspace-enter { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes dialog-enter { from { opacity: 0; transform: translateY(6px) scale(.99); } to { opacity: 1; transform: translateY(0) scale(1); } }
+@keyframes backdrop-enter { from { opacity: 0; } to { opacity: 1; } }
+
+.zeno-stat {
+  min-width: 0;
+  border-left: 3px solid currentColor;
+}
+
+.zeno-panel { min-width: 0; }
+.zeno-panel-header { min-height: 47px; }
+.zeno-panel-body { min-width: 0; }
+.zeno-panel-header svg { width: 17px; height: 17px; }
+
+.operation-map-panel > .zeno-panel-body { padding: 0; gap: 0; }
+.operation-map { flex-grow: 1; min-height: 480px; height: clamp(480px, 57vh, 660px); }
+.operation-map-summary { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px 20px; padding: 12px 16px; border-top: 1px solid var(--color-line); font-size: 12px; color: var(--color-ink-muted); }
+
+.skip-link { position: fixed; z-index: 100; top: 8px; left: 12px; padding: 10px 16px; background: var(--color-action); color: white; transform: translateY(-160%); }
+.skip-link:focus { transform: translateY(0); }
+
+@media (max-width: 639px) {
+  .operation-map { min-height: 360px; height: 420px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, ::before, ::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; scroll-behavior: auto !important; transition-duration: 0.01ms !important; }
 }
 
 /* The label above a figure or beside a status: small, spaced, upper case. The
