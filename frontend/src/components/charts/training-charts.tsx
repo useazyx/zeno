@@ -20,34 +20,35 @@
  *    crossed the goal. Two runs can end at the same loss and one of them got
  *    there in a third of the time.
  *
- * The two curve series wear the application's own red and blue, run through the
- * palette validator against a white surface: worst adjacent separation ΔE 18.9
- * under protanopia and 32.0 for normal vision, both well over the floor.
- * Identity never rests on colour alone regardless — every chart has a legend,
- * the important points are directly labelled, and the curve's numbers are in a
- * table underneath it.
+ * Training is dashed and validation solid, so the series remain distinct
+ * without colour. Measurements are also available in the table below.
  *
  * Each SVG is drawn at measured pixel size rather than scaled from a fixed
  * viewBox, because scaling a viewBox scales the hairlines and the strokes with
  * it and the chart stops being crisp at either end of the range.
  */
 
-import { useMemo, useState } from "react"
+import { useId, useMemo, useState } from "react"
+import { curvePath } from "./curve"
+import "./charts.css"
 
 import type { TrainingPoint, TrainingRun } from "@/api/types"
 import { formatLoss } from "@/lib/format"
 import { useMeasure } from "@/hooks/use-measure"
+import { useVisualMotion } from "@/hooks/use-visual-motion"
+import { learningRates } from "@/components/mapa/coverage-ai-policy"
+import "@/components/mapa/coverage-ai.css"
 
-const TRAIN_COLOR = "#A32A20"
-const VALIDATION_COLOR = "#0B63A5"
-const CONTEXT_COLOR = "#CBD5E1"
-const GRID_COLOR = "#E4E9EF"
-const AXIS_INK = "#8496A5"
-const INK = "#0F1922"
-const SURFACE = "#FFFFFF"
-const GOAL_COLOR = "#55636F"
+const TRAIN_COLOR = "var(--color-warn)"
+const VALIDATION_COLOR = "var(--color-accent)"
+const CONTEXT_COLOR = "var(--color-ink-soft)"
+const GRID_COLOR = "var(--color-line)"
+const AXIS_INK = "var(--color-ink-muted)"
+const INK = "var(--color-ink)"
+const SURFACE = "var(--color-canvas)"
+const GOAL_COLOR = "var(--color-ok)"
 
-const CURVE_HEIGHT = 300
+const CURVE_HEIGHT = 340
 const BARS_HEIGHT = 250
 const SCATTER_HEIGHT = 270
 const PADDING = { top: 20, right: 18, bottom: 32, left: 58 }
@@ -67,7 +68,7 @@ const MAX_COLUMNS = 12
  * went in: runs that finished before the column existed have null, and a
  * hand-edited row could hold anything.
  */
-export function historyOf(run: TrainingRun | null | undefined): TrainingPoint[] {
+function historyOf(run: TrainingRun | null | undefined): TrainingPoint[] {
   if (!run || !Array.isArray(run.history)) return []
 
   return run.history.filter((point): point is TrainingPoint =>
@@ -102,7 +103,7 @@ function Legend({ items }: {
           {item.swatch ? (
             <span
               className="h-3 w-4 shrink-0 border border-line"
-              style={{ background: item.color, opacity: 0.35 }}
+              style={{ background: item.color }}
             />
           ) : (
             // A line key, not a filled box: these are lines.
@@ -129,10 +130,10 @@ function ChartFrame({ title, note, children }: {
   children: React.ReactNode
 }) {
   return (
-    <figure className="flex flex-col gap-3">
-      <figcaption>
-        <p className="font-semibold text-ink">{title}</p>
-        {note && <p className="text-sm text-ink-soft">{note}</p>}
+    <figure className="analysis-chart flex h-full min-w-0 flex-col gap-4">
+      <figcaption className="border-b border-line pb-3">
+        <p className="text-base font-semibold tracking-tight text-ink">{title}</p>
+        {note && <p className="mt-1 max-w-2xl text-sm leading-relaxed text-ink-muted">{note}</p>}
       </figcaption>
       {children}
     </figure>
@@ -163,9 +164,32 @@ function TooltipRow({ color, label, value }: { color: string, label: string, val
 
 // -- the loss curve ----------------------------------------------------------
 
+function LearningRateSteps({ points, maxEpoch }: { points: TrainingPoint[]; maxEpoch: number }) {
+  const rates = learningRates(points)
+  if (!rates.length) return <p className="training-lr">Taxa de aprendizagem (LR) não registrada neste treinamento.</p>
+  const max = Math.max(...rates.map(point => point.rate))
+  const x = (epoch: number) => 12 + epoch / maxEpoch * 476
+  const y = (rate: number) => 60 - rate / max * 42
+  const path = rates.map((point, index) => index ? `H${x(point.epoch)}V${y(point.rate)}` : `M${x(point.epoch)},${y(point.rate)}`).join(" ")
+  const latest = rates[rates.length - 1]
+  const reductions = rates.filter((point, index) => index > 0 && point.rate < rates[index - 1].rate)
+  return <div className="training-lr">
+    <p>LR reportada: <strong className="text-ink">{latest.rate.toExponential(2)}</strong> ? ?poca {latest.epoch}</p>
+    <svg viewBox="0 0 500 78" role="img" aria-label={`Taxa de aprendizagem em degraus. ${reductions.length} reduções observadas.`}>
+      <path d={path} fill="none" stroke="var(--color-accent)" strokeWidth={2} />
+      {rates.map(point => <circle key={point.epoch} cx={x(point.epoch)} cy={y(point.rate)} r={2.5} fill="var(--color-accent)"><title>?poca {point.epoch}: LR {point.rate.toExponential(2)}</title></circle>)}
+      <text x={12} y={75} fill="var(--color-ink-muted)" fontSize={11}>?pocas registradas</text>
+    </svg>
+    <p>{reductions.length ? reductions.map(point => `Época ${point.epoch}: ${point.rate.toExponential(2)}`).join(" · ") : "Nenhuma redução de LR entre as medições recebidas."} Os degraus marcam registros recebidos, não o instante exato da redução.</p>
+  </div>
+}
+
 export function LossCurve({ run, previous }: { run: TrainingRun, previous: TrainingRun[] }) {
   const [ref, width] = useMeasure()
   const [hover, setHover] = useState<number | null>(null)
+  const motion = useVisualMotion()
+  const clipId = useId()
+  const running = run.status === "EXECUTANDO" || run.status === "PENDENTE"
 
   const points = useMemo(() => historyOf(run), [run])
 
@@ -183,13 +207,14 @@ export function LossCurve({ run, previous }: { run: TrainingRun, previous: Train
   const maxEpoch = Math.max(
     run.epochs,
     ...points.map((point) => point.epoch),
-    ...context.flatMap((other) => other.points.map((point) => point.epoch)),
     1,
   )
 
   const maxLoss = Math.max(
     ...points.flatMap((point) => [point.train_loss ?? 0, point.validation_loss ?? 0]),
-    ...context.flatMap((other) => other.points.map((point) => point.validation_loss ?? 0)),
+    ...context.flatMap((other) => other.points
+      .filter((point) => point.epoch <= maxEpoch)
+      .map((point) => point.validation_loss ?? 0)),
     0.0001,
   ) * 1.08
 
@@ -197,17 +222,13 @@ export function LossCurve({ run, previous }: { run: TrainingRun, previous: Train
   const y = (loss: number) => PADDING.top + plotHeight - (loss / maxLoss) * plotHeight
 
   const pathOf = (series: TrainingPoint[], pick: (point: TrainingPoint) => number | null) => {
-    let started = false
-
-    return series.reduce((path, point) => {
+    const segments: { x: number; y: number }[][] = [[]]
+    series.forEach((point) => {
       const value = pick(point)
-      if (value === null || value === undefined) return path
-
-      const command = started ? "L" : "L"
-      const prefix = started ? command : "M"
-      started = true
-      return `${path}${prefix}${x(point.epoch).toFixed(1)},${y(value).toFixed(1)} `
-    }, "").trim()
+      if (value === null || !Number.isFinite(value)) { segments.push([]); return }
+      segments[segments.length - 1].push({ x: x(point.epoch), y: y(value) })
+    })
+    return segments.map(curvePath).join(" ")
   }
 
   /**
@@ -223,15 +244,8 @@ export function LossCurve({ run, previous }: { run: TrainingRun, previous: Train
 
     if (both.length < 2) return ""
 
-    const down = both
-      .map((point, index) =>
-        `${index === 0 ? "M" : "L"}${x(point.epoch).toFixed(1)},${y(point.train_loss as number).toFixed(1)}`)
-      .join(" ")
-
-    const back = [...both]
-      .reverse()
-      .map((point) => `L${x(point.epoch).toFixed(1)},${y(point.validation_loss as number).toFixed(1)}`)
-      .join(" ")
+    const down = curvePath(both.map((point) => ({ x: x(point.epoch), y: y(point.train_loss as number) })))
+    const back = curvePath([...both].reverse().map((point) => ({ x: x(point.epoch), y: y(point.validation_loss as number) }))).replace(/^M/, "L")
 
     return `${down} ${back} Z`
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -267,16 +281,21 @@ export function LossCurve({ run, previous }: { run: TrainingRun, previous: Train
       title="Curva de perda"
       note={`Uma medição a cada 50 épocas, de ${points[0].epoch} a ${last.epoch} de ${run.epochs} pedidas.`}
     >
+      <div className="chart-readout">
+        <div><span>Melhor validação</span><strong>{formatLoss(best?.validation_loss ?? null)}</strong></div>
+        <div><span>Época do melhor resultado</span><strong>{best?.epoch ?? "—"}<small> / {run.epochs}</small></strong></div>
+        <div><span>Última perda de treino</span><strong>{formatLoss(last.train_loss)}</strong></div>
+      </div>
       <Legend items={[
-        { color: TRAIN_COLOR, label: "Loss de treino" },
-        { color: VALIDATION_COLOR, label: "Loss de validação" },
-        { color: TRAIN_COLOR, label: "Distância entre as duas", swatch: true },
+        { color: TRAIN_COLOR, label: "Treino", dashed: true },
+        { color: VALIDATION_COLOR, label: "Validação" },
+        { color: TRAIN_COLOR, label: "Diferença treino / validação", swatch: true },
         ...(context.length > 0
           ? [{ color: CONTEXT_COLOR, label: `Treinos anteriores (${context.length})` }]
           : []),
       ]} />
 
-      <div ref={ref} className="relative w-full">
+      <div ref={ref} className="chart-plot relative w-full">
         {width > 0 && (
           <svg
             width={width}
@@ -288,7 +307,7 @@ export function LossCurve({ run, previous }: { run: TrainingRun, previous: Train
               <g key={tick}>
                 <line
                   x1={PADDING.left} y1={y(tick)} x2={width - PADDING.right} y2={y(tick)}
-                  stroke={GRID_COLOR} strokeWidth={1}
+                  stroke={GRID_COLOR} strokeWidth={1} strokeDasharray="2 4"
                 />
                 <text
                   x={PADDING.left - 8} y={y(tick) + 4}
@@ -325,7 +344,7 @@ export function LossCurve({ run, previous }: { run: TrainingRun, previous: Train
                 <rect
                   x={x(last.epoch)} y={PADDING.top}
                   width={Math.max(0, x(maxEpoch) - x(last.epoch))} height={plotHeight}
-                  fill="#F3F6F9" opacity={0.85}
+                  fill="var(--color-surface-muted)" opacity={0.85}
                 />
                 <line
                   x1={x(last.epoch)} y1={PADDING.top}
@@ -339,24 +358,35 @@ export function LossCurve({ run, previous }: { run: TrainingRun, previous: Train
             {context.map((other) => (
               <path
                 key={other.id}
-                d={pathOf(other.points, (point) => point.validation_loss)}
+                d={pathOf(other.points.filter((point) => point.epoch <= maxEpoch), (point) => point.validation_loss)}
                 fill="none" stroke={CONTEXT_COLOR} strokeWidth={1.5}
                 strokeLinejoin="round" strokeLinecap="round"
               />
             ))}
 
-            {gapPath && <path d={gapPath} fill={TRAIN_COLOR} opacity={0.14} />}
+            <defs><clipPath id={clipId}><rect x={PADDING.left - 6} y={0} width={plotWidth + 12} height={CURVE_HEIGHT}
+              className="training-reveal" style={{ transform: `scaleX(${Math.min(1, (last.epoch / maxEpoch) + .02)})`, transformOrigin: `${PADDING.left - 6}px 0px`, transition: motion.animate && running ? undefined : "none" }} /></clipPath></defs>
+            <g clipPath={`url(#${clipId})`}>
+            {gapPath && <path d={gapPath} fill={TRAIN_COLOR} opacity={0.07} />}
 
             <path
               d={pathOf(points, (point) => point.train_loss)}
-              fill="none" stroke={TRAIN_COLOR} strokeWidth={2}
+              fill="none" stroke={TRAIN_COLOR} strokeWidth={2} strokeDasharray="6 4"
               strokeLinejoin="round" strokeLinecap="round"
             />
             <path
               d={pathOf(points, (point) => point.validation_loss)}
-              fill="none" stroke={VALIDATION_COLOR} strokeWidth={2}
+              fill="none" stroke={VALIDATION_COLOR} strokeWidth={3}
               strokeLinejoin="round" strokeLinecap="round"
             />
+
+            {points.filter((point) => point.validation_loss !== null).map((point) => (
+              <circle key={point.epoch} cx={x(point.epoch)} cy={y(point.validation_loss!)} r={points.length > 60 ? 1.5 : 3}
+                fill={SURFACE} stroke={VALIDATION_COLOR} strokeWidth={1.5} />
+            ))}
+
+            {running && last.validation_loss !== null && <circle cx={x(last.epoch)} cy={y(last.validation_loss)} r={6} fill="none" stroke={VALIDATION_COLOR} strokeWidth={2} className={motion.animate ? "training-current-pulse" : undefined} />}
+            </g>
 
             {/* The epoch whose checkpoint was kept, labelled directly: it is
                 the one point on the chart the run is judged by. */}
@@ -404,6 +434,20 @@ export function LossCurve({ run, previous }: { run: TrainingRun, previous: Train
               x={PADDING.left} y={PADDING.top}
               width={plotWidth} height={plotHeight}
               fill="transparent"
+              tabIndex={0}
+              role="slider"
+              aria-label="Consultar medições por Época"
+              aria-valuemin={0}
+              aria-valuemax={points.length - 1}
+              aria-valuenow={hover ?? 0}
+              aria-valuetext={`Época ${points[hover ?? 0].epoch}: validação ${formatLoss(points[hover ?? 0].validation_loss)}`}
+              onFocus={() => setHover(0)}
+              onBlur={() => setHover(null)}
+              onKeyDown={(event) => {
+                if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return
+                event.preventDefault()
+                setHover((value) => event.key === "Home" ? 0 : event.key === "End" ? points.length - 1 : Math.max(0, Math.min(points.length - 1, (value ?? 0) + (event.key === "ArrowRight" ? 1 : -1))))
+              }}
               onPointerMove={(event) => {
                 const box = event.currentTarget.getBoundingClientRect()
                 const ratio = (event.clientX - box.left) / (box.width || 1)
@@ -440,16 +484,18 @@ export function LossCurve({ run, previous }: { run: TrainingRun, previous: Train
         )}
       </div>
 
+      <LearningRateSteps points={points} maxEpoch={maxEpoch} />
+
       {stoppedEarly && (
         <p className="text-sm text-ink-soft">
-          A corrida parou na época {last.epoch} das {run.epochs} pedidas — a área clara à direita
+          A corrida parou na época {last.epoch} das {run.epochs} pedidas — a área marcada à direita
           é o que o <em>early stopping</em> dispensou quando a loss de validação deixou de
           melhorar.
         </p>
       )}
 
       <details className="text-sm text-ink-muted">
-        <summary className="cursor-pointer font-semibold text-ink-muted">Ver os números</summary>
+        <summary className="cursor-pointer border-t border-line py-3 font-semibold text-ink-muted focus-visible:outline-2 focus-visible:outline-offset-2">Consultar medições por época</summary>
 
         <div className="mt-2 max-h-64 overflow-y-auto">
           <table className="w-full text-left">
@@ -458,7 +504,8 @@ export function LossCurve({ run, previous }: { run: TrainingRun, previous: Train
                 <th className="py-1 pr-3 font-semibold">Época</th>
                 <th className="py-1 pr-3 font-semibold">Treino</th>
                 <th className="py-1 pr-3 font-semibold">Validação</th>
-                <th className="py-1 font-semibold">Melhor</th>
+                <th className="py-1 pr-3 font-semibold">Melhor</th>
+                <th className="py-1 font-semibold">LR</th>
               </tr>
             </thead>
             <tbody style={{ fontVariantNumeric: "tabular-nums" }}>
@@ -467,7 +514,8 @@ export function LossCurve({ run, previous }: { run: TrainingRun, previous: Train
                   <td className="py-1 pr-3">{point.epoch}</td>
                   <td className="py-1 pr-3">{formatLoss(point.train_loss)}</td>
                   <td className="py-1 pr-3">{formatLoss(point.validation_loss)}</td>
-                  <td className="py-1">{formatLoss(point.best_validation_loss)}</td>
+                  <td className="py-1 pr-3">{formatLoss(point.best_validation_loss)}</td>
+                  <td className="py-1">{point.learning_rate?.toExponential(2) ?? "?"}</td>
                 </tr>
               ))}
             </tbody>
@@ -515,7 +563,7 @@ export function RunComparison({ runs, threshold, onSelect, selectedId }: {
   const maxLoss = Math.max(...series.map((entry) => entry.value), threshold) * 1.15
   const slot = plotWidth / series.length
   // Capped rather than filling the slot: the leftover is deliberate air.
-  const barWidth = Math.min(24, Math.max(8, slot - 14))
+  const barWidth = Math.min(40, Math.max(4, slot * 0.6))
 
   const y = (loss: number) => PADDING.top + plotHeight - (loss / maxLoss) * plotHeight
   const best = series.reduce((a, b) => (b.value < a.value ? b : a))
@@ -525,19 +573,19 @@ export function RunComparison({ runs, threshold, onSelect, selectedId }: {
       title="Melhor loss de validação por treinamento"
       note={`Do mais antigo ao mais recente. Quanto menor, melhor — a linha tracejada é a meta de ${formatLoss(threshold)} do projeto.`}
     >
-      <div ref={ref} className="relative w-full">
+      <div ref={ref} className="chart-plot relative w-full">
         {width > 0 && (
           <svg
             width={width}
             height={BARS_HEIGHT}
-            role="img"
+            role="group"
             aria-label="Melhor loss de validação de cada treinamento, do mais antigo ao mais recente"
           >
             {ticksUpTo(maxLoss).map((tick) => (
               <g key={tick}>
                 <line
                   x1={PADDING.left} y1={y(tick)} x2={width - PADDING.right} y2={y(tick)}
-                  stroke={GRID_COLOR} strokeWidth={1}
+                  stroke={GRID_COLOR} strokeWidth={1} strokeDasharray="2 4"
                 />
                 <text
                   x={PADDING.left - 8} y={y(tick) + 4}
@@ -561,7 +609,7 @@ export function RunComparison({ runs, threshold, onSelect, selectedId }: {
                     width={barWidth} height={PADDING.top + plotHeight - top}
                     fill={VALIDATION_COLOR}
                     opacity={active ? 1 : 0.8}
-                    rx={3}
+                    rx={1}
                   />
 
                   {entry.run.id === best.run.id && (
@@ -578,7 +626,7 @@ export function RunComparison({ runs, threshold, onSelect, selectedId }: {
                     x={centre} y={BARS_HEIGHT - 12}
                     textAnchor="middle" fontSize={10} fill={AXIS_INK}
                   >
-                    {shortDate(entry.run.finished_at ?? entry.run.created_at)}
+                    {width < 480 ? index + 1 : shortDate(entry.run.finished_at ?? entry.run.created_at)}
                   </text>
 
                   {/* The hit target is the whole column, not the painted bar. */}
@@ -586,6 +634,19 @@ export function RunComparison({ runs, threshold, onSelect, selectedId }: {
                     x={PADDING.left + slot * index} y={PADDING.top}
                     width={slot} height={plotHeight}
                     fill="transparent"
+                    tabIndex={onSelect ? 0 : undefined}
+                    role="button"
+                    aria-label={`Selecionar treinamento ${fullDate(entry.run.created_at)}, validação ${formatLoss(entry.value)}`}
+                    aria-pressed={entry.run.id === selectedId}
+                    className="focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-info"
+                    onFocus={() => setHover(entry.run.id)}
+                    onBlur={() => setHover(null)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter" || event.key === " ") {
+                        event.preventDefault()
+                        onSelect?.(entry.run.id)
+                      }
+                    }}
                     style={{ cursor: onSelect ? "pointer" : "default" }}
                     onPointerEnter={() => setHover(entry.run.id)}
                     onPointerLeave={() => setHover(null)}
@@ -697,19 +758,19 @@ export function EpochsVsQuality({ runs, threshold, selectedId, onSelect }: {
       title="Épocas × qualidade"
       note="Cada bolha é um treinamento. Quanto mais à direita, mais épocas foram pedidas; quanto mais abaixo, melhor o resultado. O tamanho é o tempo que a corrida levou."
     >
-      <div ref={ref} className="relative w-full">
+      <div ref={ref} className="chart-plot relative w-full">
         {width > 0 && (
           <svg
             width={width}
             height={SCATTER_HEIGHT}
-            role="img"
+            role="group"
             aria-label="Épocas pedidas contra a melhor loss de validação de cada treinamento"
           >
             {ticksUpTo(maxLoss).map((tick) => (
               <g key={tick}>
                 <line
                   x1={PADDING.left} y1={y(tick)} x2={width - PADDING.right} y2={y(tick)}
-                  stroke={GRID_COLOR} strokeWidth={1}
+                  stroke={GRID_COLOR} strokeWidth={1} strokeDasharray="2 4"
                 />
                 <text
                   x={PADDING.left - 8} y={y(tick) + 4}
@@ -743,16 +804,30 @@ export function EpochsVsQuality({ runs, threshold, selectedId, onSelect }: {
             />
 
             {points.map((point) => {
-              const active = point.run.id === selectedId || point.run.id === hover
+              const selected = point.run.id === selectedId
+              const active = selected || point.run.id === hover
 
               return (
                 <circle
                   key={point.run.id}
                   cx={x(point.run.epochs)} cy={y(point.value)}
                   r={radius(point.minutes)}
-                  fill={active ? TRAIN_COLOR : VALIDATION_COLOR}
+                  fill={selected ? TRAIN_COLOR : VALIDATION_COLOR}
                   opacity={active ? 0.95 : 0.55}
-                  stroke={SURFACE} strokeWidth={2}
+                  stroke={active ? INK : SURFACE} strokeWidth={2}
+                  tabIndex={onSelect ? 0 : undefined}
+                  role="button"
+                  aria-label={`Selecionar treinamento ${fullDate(point.run.created_at)}, ${point.run.epochs} épocas, validação ${formatLoss(point.value)}`}
+                  aria-pressed={point.run.id === selectedId}
+                  className="focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-info"
+                  onFocus={() => setHover(point.run.id)}
+                  onBlur={() => setHover(null)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault()
+                      onSelect?.(point.run.id)
+                    }
+                  }}
                   style={{ cursor: onSelect ? "pointer" : "default" }}
                   onPointerEnter={() => setHover(point.run.id)}
                   onPointerLeave={() => setHover(null)}
@@ -849,10 +924,10 @@ export function ConvergenceSpeed({ runs, threshold }: {
       title="Épocas até atingir a meta"
       note={`Quantas épocas cada corrida gastou antes de cruzar ${formatLoss(threshold)} pela primeira vez. Menos é melhor.`}
     >
-      <ol className="flex flex-col gap-3">
+      <ol className="flex max-h-80 flex-col gap-4 overflow-y-auto pr-1">
         {entries.map((entry) => (
           <li key={entry.run.id} className="flex flex-col gap-1">
-            <div className="flex items-baseline justify-between gap-3">
+            <div className="flex flex-wrap items-baseline justify-between gap-2">
               <span className="text-ink">
                 {fullDate(entry.run.finished_at ?? entry.run.created_at)}
                 <span className="ml-2 text-sm text-ink-soft">{entry.run.epochs} épocas</span>
@@ -866,7 +941,7 @@ export function ConvergenceSpeed({ runs, threshold }: {
             </div>
 
             <div
-              className="h-2.5 rounded-r-[4px]"
+              className="h-2"
               style={{
                 width: `${Math.max(2, ((entry.epoch ?? entry.measured) / max) * 100)}%`,
                 background: entry.epoch === null ? CONTEXT_COLOR : VALIDATION_COLOR,
