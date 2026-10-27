@@ -12,11 +12,13 @@
  */
 
 import { useEffect, useRef, useState } from "react"
-import { ChevronDown, Menu, Radio } from "lucide-react"
-import { Link, NavLink } from "react-router-dom"
+import { ChevronDown, Menu, Radio, Search } from "lucide-react"
+import { Link, NavLink, useLocation } from "react-router-dom"
 
-import zeno from "@/assets/Zeno.png"
-import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
+import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/sheet"
+import { ThemeToggle } from "@/components/layout/theme-toggle"
+import { openCommandPalette } from "@/lib/palette-events"
+import { AlertToggle } from "@/components/layout/critical-alert"
 import { useRealtime } from "@/hooks/use-realtime"
 import { cn } from "@/lib/utils"
 
@@ -30,16 +32,19 @@ const OPERATIONAL: NavItem[] = [
   { to: "/ocorrencias", label: "Ocorrências" },
   { to: "/despachos", label: "Despachos" },
   { to: "/rotas", label: "Rotas" },
+  { to: "/cobertura", label: "Cobertura" },
   { to: "/estatisticas", label: "Estatísticas" },
-  { to: "/rede-neural", label: "Rede Neural" },
+  { to: "/rede-neural", label: "IA" },
 ]
 
 const REGISTRY: NavItem[] = [
   { to: "/efetivo", label: "Efetivo" },
   { to: "/viaturas", label: "Viaturas" },
+  { to: "/garagem", label: "Garagem 3D" },
   { to: "/guarnicoes", label: "Guarnições" },
   { to: "/turnos", label: "Turnos" },
   { to: "/unidades", label: "Unidades" },
+  { to: "/hidrantes", label: "Pontos de água" },
 ]
 
 /** An underline in the accent marks the screen you are on — no colour fill. */
@@ -51,6 +56,8 @@ const linkClass = ({ isActive }: { isActive: boolean }) =>
 
 export default function Navbar() {
   const { connected } = useRealtime(() => undefined)
+  const { pathname } = useLocation()
+  const registryActive = REGISTRY.some((item) => pathname === item.to)
 
   const [registryOpen, setRegistryOpen] = useState(false)
   const registryRef = useRef<HTMLDivElement>(null)
@@ -67,35 +74,46 @@ export default function Navbar() {
     }
 
     document.addEventListener("mousedown", onClickOutside)
-    return () => document.removeEventListener("mousedown", onClickOutside)
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return
+      setRegistryOpen(false)
+      registryRef.current?.querySelector("button")?.focus()
+    }
+    document.addEventListener("keydown", onKey)
+    return () => {
+      document.removeEventListener("mousedown", onClickOutside)
+      document.removeEventListener("keydown", onKey)
+    }
   }, [registryOpen])
 
   return (
     <header className="sticky top-0 z-40 flex h-14 w-full shrink-0 items-center justify-between gap-3 border-b border-chrome-line bg-chrome px-3 sm:h-16 sm:gap-6 sm:px-4 lg:px-6">
       <Link to="/" className="flex shrink-0 items-center gap-3">
-        {/* The mark is a glow on black. Screening it over the bar drops the
-            black and leaves the glow, so no cut-out asset is needed. */}
-        <img src={zeno} alt="Zeno" className="h-10 w-auto object-contain mix-blend-screen sm:h-12" />
-        <span className="hidden border-l border-chrome-line pl-3 leading-tight sm:block">
+        <img src="/zeno-logo.svg" alt="ZENO · Início" width={126} height={30} className="h-[30px] w-[126px]" />
+        <span className="hidden border-l border-chrome-line pl-3 leading-tight 2xl:block">
           <span className="block text-xs font-semibold text-chrome-ink">Central de Despacho</span>
           <span className="label-caps block text-chrome-muted">CB · Taubaté</span>
         </span>
       </Link>
 
-      <nav className="hidden h-full items-stretch gap-5 xl:flex 2xl:gap-7">
+      <nav aria-label="Navegação principal" className="hidden h-full items-stretch gap-4 xl:flex 2xl:gap-6">
         {OPERATIONAL.map((item) => (
           <NavLink key={item.to} to={item.to} end={item.to === "/"} className={linkClass}>
             {item.label}
           </NavLink>
         ))}
 
-        <div className="relative flex items-stretch" ref={registryRef}>
+        <div className="relative flex items-stretch" ref={registryRef} onBlur={(event) => {
+          if (!event.currentTarget.contains(event.relatedTarget)) setRegistryOpen(false)
+        }}>
           <button
             type="button"
             onClick={() => setRegistryOpen((open) => !open)}
+            aria-expanded={registryOpen}
+            aria-controls="registry-links"
             className={cn(
               "flex h-full items-center gap-1 border-b-2 border-transparent px-0.5 text-sm font-medium transition-colors",
-              registryOpen ? "text-white" : "text-chrome-muted hover:text-white",
+              registryOpen || registryActive ? "border-accent text-white" : "text-chrome-muted hover:text-white",
             )}
           >
             Cadastros
@@ -103,15 +121,15 @@ export default function Navbar() {
           </button>
 
           {registryOpen && (
-            <div className="absolute right-0 top-full z-40 flex w-52 flex-col rounded-sm border border-line bg-surface py-1 shadow-2xl">
+            <div id="registry-links" className="zeno-popover absolute right-0 top-full z-40 flex w-52 flex-col rounded-sm border border-chrome-line bg-chrome py-1 shadow-xl">
               {REGISTRY.map((item) => (
                 <NavLink
                   key={item.to}
                   to={item.to}
                   onClick={() => setRegistryOpen(false)}
                   className={({ isActive }) => cn(
-                    "px-4 py-2 text-sm text-ink-muted transition-colors hover:bg-surface-muted hover:text-ink",
-                    isActive && "bg-accent-soft font-semibold text-accent",
+                    "px-4 py-2.5 text-sm text-chrome-muted transition-colors hover:bg-chrome-soft hover:text-chrome-ink",
+                    isActive && "bg-chrome-soft font-semibold text-chrome-ink",
                   )}
                 >
                   {item.label}
@@ -122,7 +140,18 @@ export default function Navbar() {
         </div>
       </nav>
 
-      <div className="flex items-center gap-3 sm:gap-4">
+      <div className="flex items-center gap-2 sm:gap-3">
+        <ThemeToggle />
+        <button
+          type="button"
+          onClick={openCommandPalette}
+          className="flex items-center gap-2 rounded-sm border border-chrome-line px-2 py-1.5 text-chrome-muted transition-colors hover:text-white"
+          aria-label="Buscar tela ou ocorrência (Ctrl+K)"
+        >
+          <Search className="h-4 w-4" />
+          <kbd className="label-caps hidden 2xl:inline">Ctrl K</kbd>
+        </button>
+        <AlertToggle />
         <LiveIndicator connected={connected} />
         <Clock />
         <MobileNav />
@@ -191,7 +220,8 @@ function MobileNav() {
 
       {/* The kit's own close button inherits shadcn tokens this project never
           defined, so it would be invisible on the dark panel. */}
-      <SheetContent side="right" showCloseButton={false} className="border-chrome-line bg-chrome">
+      <SheetContent side="right" showCloseButton={false} aria-describedby={undefined} className="overflow-y-auto border-chrome-line bg-chrome">
+        <SheetTitle className="sr-only">Navegação do ZENO</SheetTitle>
         <button
           type="button"
           onClick={() => setOpen(false)}
