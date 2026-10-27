@@ -12,6 +12,27 @@ describe("AiClient", () => {
     global.fetch = originalFetch
   })
 
+  it("forwards trace only when requested and keeps it in the live response", async () => {
+    const payload = { neural: { exploration: [[-23, -45]] } }
+    const fetchMock = jest.fn().mockResolvedValue(jsonResponse(200, payload))
+    global.fetch = fetchMock as unknown as typeof fetch
+    const client = new AiClient()
+    const origin = { latitude: -23, longitude: -45 }
+    expect(await client.calculateRoute(origin, origin, { trace: true })).toEqual(payload)
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body).trace).toBe(true)
+    await client.calculateRoute(origin, origin, { trace: false })
+    expect(JSON.parse(fetchMock.mock.calls[1][1].body)).not.toHaveProperty("trace")
+  })
+
+  it("encodes bbox and refuses oversized map layers", async () => {
+    const fetchMock = jest.fn().mockResolvedValue(jsonResponse(200, { type: "FeatureCollection", features: [] }))
+    global.fetch = fetchMock as unknown as typeof fetch
+    await new AiClient().edgeCosts("-46,-24,-45,-23")
+    expect(fetchMock.mock.calls[0][0]).toContain("bbox=-46%2C-24%2C-45%2C-23")
+    fetchMock.mockResolvedValue(jsonResponse(200, { padding: "x".repeat(17 * 1024 * 1024) }))
+    await expect(new AiClient().edgeCosts()).rejects.toThrow("limite de resposta")
+  })
+
   it("posts the origin and destination and returns the parsed route response", async () => {
     const routePayload = {
       neural: { distance_meters: 1000, estimated_time_seconds: 120, node_count: 5, geometry: [] },
