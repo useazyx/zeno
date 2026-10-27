@@ -36,5 +36,5 @@
   "files.autoSave": "afterDelay",
   "diffEditor.ignoreTrimWhitespace": false,
   "python-envs.defaultEnvManager": "ms-python.python:system",
-  "cmake.sourceDirectory": "/home/thefato/thefato/fatec/projeto-integrador/machine/src/cpp",
+  "cmake.sourceDirectory": "C:/Users/arthu/OneDrive/Documentos/projeto-integrador-main/machine/src/cpp",
 }
