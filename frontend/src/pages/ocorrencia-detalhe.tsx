@@ -8,8 +8,8 @@
 
 import { useCallback, useMemo, useState } from "react"
 import type { FormEvent } from "react"
-import { ArrowLeft, Brain, MapPin, Pencil, Route as RouteIcon, Send, Truck } from "lucide-react"
-import { Link, useParams } from "react-router-dom"
+import { ArrowLeft, Brain, ListOrdered, MapPin, Pencil, Play, Printer, Route as RouteIcon, Send, Sparkles, Truck } from "lucide-react"
+import { Link, useParams, useSearchParams } from "react-router-dom"
 
 import { crews, dispatches, occurrences, units, vehicles } from "@/api/endpoints"
 import { translateMessage } from "@/api/messages"
@@ -19,7 +19,7 @@ import {
   PRIORITY_LABEL, PRIORITY_TEXT_TONE, PRIORITY_TONE, VEHICLE_TYPE_LABEL, optionsOf,
 } from "@/api/labels"
 import type {
-  Dispatch, DispatchStatus, Occurrence, OccurrencePriority, OccurrenceStatus, RouteVariant,
+  Dispatch, DispatchStatus, Occurrence, OccurrencePriority, OccurrenceStatus, RouteStep, RouteVariant,
 } from "@/api/types"
 import {
   ActionButton, Badge, ConfirmButton, Field, Modal, Page, PageHeader, Panel, Select,
@@ -28,6 +28,14 @@ import {
 import { EmptyState, ErrorBox, ErrorDetails, FullPageSpinner } from "@/components/layout/feedback"
 import RouteMap from "@/components/mapa/route-map"
 import { OccurrenceAvatar } from "@/components/occurrence-icon"
+import { printOccurrenceReport } from "@/components/occurrence/print-report"
+import { SceneSupport } from "@/components/occurrence/scene-support"
+import { OccurrenceReplay } from "@/components/operational/occurrence-replay"
+import { OccurrenceStages } from "@/components/operational/occurrence-stages"
+import { useTimeline } from "@/hooks/use-timeline"
+import { VehicleRecommendations } from "@/components/occurrence/vehicle-recommendations"
+import { RouteInsight } from "@/components/route/route-insight"
+import { RouteSteps } from "@/components/route/route-steps"
 import { useRealtime } from "@/hooks/use-realtime"
 import { useMutation, useResource } from "@/hooks/use-resource"
 import {
@@ -37,9 +45,13 @@ import { stationsOf } from "@/lib/geo"
 
 export default function OcorrenciaDetalhe() {
   const { id = "" } = useParams()
+  const [searchParams] = useSearchParams()
   const [dispatching, setDispatching] = useState(false)
   const [editing, setEditing] = useState(false)
   const [theater, setTheater] = useState(false)
+  const [replayRequest, setReplayRequest] = useState(0)
+  const [explain, setExplain] = useState(false)
+  const [focus, setFocus] = useState<{ latitude: number, longitude: number, key: number } | null>(null)
 
   const detail = useResource(() => occurrences.get(id), [id], { enabled: Boolean(id) })
   const reload = detail.reload
@@ -62,6 +74,8 @@ export default function OcorrenciaDetalhe() {
 
   const stations = useMemo(() => stationsOf(unitList.data?.items), [unitList.data])
 
+  const timeline = useTimeline(id)
+
   if (detail.loading && !detail.data) return <FullPageSpinner label="Carregando ocorrência..." />
   if (detail.error) return <Page><ErrorBox message={detail.error} onRetry={detail.reload} /></Page>
   if (!detail.data) return null
@@ -72,9 +86,14 @@ export default function OcorrenciaDetalhe() {
   // The map shows the newest dispatch, which is the one being driven now.
   const current = dispatchList[dispatchList.length - 1] ?? null
   const neural = current?.routes?.find((route) => route.algorithm === "NEURAL") ?? null
+  const critical = current?.routes?.find((route) => route.algorithm === "CRITICAL") ?? null
   const shortest = current?.routes?.find((route) => route.algorithm === "DIJKSTRA") ?? null
 
   const closed = occurrence.status === "ENCERRADA" || occurrence.status === "CANCELADA"
+  const usedRoute = current?.used_route
+    ?? current?.routes?.find((route) => route.id === current.used_route_id)
+    ?? (closed ? (current?.critical_mode ? critical : neural) : null)
+  const displayedRoute = closed && usedRoute ? usedRoute : neural
 
   return (
     <Page>
@@ -86,8 +105,17 @@ export default function OcorrenciaDetalhe() {
       <PageHeader
         title={`Ocorrência ${occurrence.protocol}`}
         subtitle={`${NATURE_LABEL[occurrence.nature]} — aberta ${formatElapsed(occurrence.opened_at)}`}
-        actions={!closed && (
+        actions={(
           <>
+            <ActionButton
+              tone="ghost"
+              onClick={() => printOccurrenceReport(occurrence, timeline.data ?? [])}
+              title="Relatório de atendimento para arquivo ou assinatura"
+            >
+              <Printer className="h-4 w-4" />
+              Imprimir relatório
+            </ActionButton>
+            {!closed && <>
             <ActionButton tone="neutral" onClick={() => setEditing(true)}>
               <Pencil className="h-4 w-4" />
               Editar
@@ -110,11 +138,13 @@ export default function OcorrenciaDetalhe() {
               <Send className="h-5 w-5" />
               Despachar viatura
             </ActionButton>
+            </>}
           </>
         )}
       />
 
       {changeStatus.error && <ErrorBox message={changeStatus.error} />}
+      <OccurrenceStages occurrence={occurrence} events={timeline.data ?? []} />
 
       {/* The severity band of the first version filled this whole strip. One
           incident deserves the emphasis, but as a rail down the side, so the
@@ -148,70 +178,128 @@ export default function OcorrenciaDetalhe() {
       </div>
 
       <div className={theater
-        ? "flex flex-col-reverse gap-4 sm:gap-5"
-        : "grid gap-4 sm:gap-5 lg:grid-cols-[1fr_1.4fr]"}>
-        <div className="flex flex-col gap-5">
-          <Panel title="Detalhes" icon={<MapPin className="h-5 w-5" />}>
-            <Detail term="Solicitante" value={occurrence.caller_name ?? "Não informado"} />
-            <Detail term="Telefone" value={occurrence.caller_phone ?? "Não informado"} />
-            <Detail term="Unidade responsável" value={occurrence.unit ? `${occurrence.unit.acronym} — ${occurrence.unit.name}` : "—"} />
-            <Detail term="Aberta em" value={formatDateTime(occurrence.opened_at)} />
-            {occurrence.closed_at && <Detail term="Encerrada em" value={formatDateTime(occurrence.closed_at)} />}
-            <Detail
-              term="Coordenadas"
-              value={`${formatCoordinate(occurrence.latitude)}, ${formatCoordinate(occurrence.longitude)}`}
-            />
+        ? "flex flex-col gap-4 sm:gap-5"
+        : "grid items-stretch gap-4 sm:gap-5 lg:grid-cols-[1fr_1.4fr]"}>
+        <Panel title="Detalhes" icon={<MapPin className="h-5 w-5" />}>
+          <Detail term="Solicitante" value={occurrence.caller_name ?? "Não informado"} />
+          <Detail term="Telefone" value={occurrence.caller_phone ?? "Não informado"} />
+          <Detail term="Unidade responsável" value={occurrence.unit ? `${occurrence.unit.acronym} — ${occurrence.unit.name}` : "—"} />
+          <Detail term="Aberta em" value={formatDateTime(occurrence.opened_at)} />
+          {occurrence.closed_at && <Detail term="Encerrada em" value={formatDateTime(occurrence.closed_at)} />}
+          <Detail
+            term="Coordenadas"
+            value={`${formatCoordinate(occurrence.latitude)}, ${formatCoordinate(occurrence.longitude)}`}
+          />
 
-            <div className="pt-1">
-              <p className="font-semibold text-ink">Relato</p>
-              <p className="mt-1 whitespace-pre-line text-ink">{occurrence.description}</p>
+          <div className="pt-1">
+            <p className="font-semibold text-ink">Relato</p>
+            <p className="mt-1 whitespace-pre-line text-ink">{occurrence.description}</p>
+          </div>
+        </Panel>
+
+        <Panel
+          title={closed && usedRoute ? "Rota utilizada" : "Rota calculada"}
+          icon={<RouteIcon className="h-5 w-5" />}
+          actions={displayedRoute ? (
+            <div className="flex flex-wrap gap-2">
+              {(displayedRoute.segments?.length ?? 0) > 0 && (
+                <ActionButton
+                  tone={explain ? "primary" : "neutral"}
+                  className="px-3 py-1.5 text-sm"
+                  aria-pressed={explain}
+                  onClick={() => setExplain((value) => !value)}
+                  title="Pinta a rota pela velocidade que a rede prevê em cada trecho"
+                >
+                  <Sparkles className="h-4 w-4" />
+                  Explicar
+                </ActionButton>
+              )}
+              {closed && usedRoute && (
+                <ActionButton
+                  tone="neutral"
+                  className="px-3 py-1.5 text-sm"
+                  onClick={() => setReplayRequest((value) => value + 1)}
+                >
+                  <Play className="h-4 w-4" />
+                  Simular novamente
+                </ActionButton>
+              )}
             </div>
-          </Panel>
+          ) : undefined}
+        >
+          {closed && usedRoute && (
+            <p className="rounded-sm border border-accent/25 bg-accent-soft px-3 py-2 text-sm text-ink">
+              Rota registrada no atendimento: <strong>{routeAlgorithmLabel(usedRoute.algorithm)}</strong>.
+              O trajeto abaixo é o histórico salvo, não um novo cálculo.
+            </p>
+          )}
 
-          <RouteComparison neural={neural} shortest={shortest} />
-        </div>
+          <RouteMap
+            route={displayedRoute?.geometry ?? null}
+            critical={!closed ? critical?.geometry ?? null : null}
+            comparison={shortest?.geometry ?? null}
+            stations={stations}
+            selectedStationId={occurrence.unit_id}
+            pin={displayedRoute ? null : {
+              latitude: toNumber(occurrence.latitude) ?? 0,
+              longitude: toNumber(occurrence.longitude) ?? 0,
+              label: `Ocorrência ${occurrence.protocol}`,
+            }}
+            theater={theater}
+            onTheaterToggle={() => setTheater((current) => !current)}
+            simulationRequest={replayRequest}
+            presentationStep={searchParams.get('presentation')}
+            routeSegments={displayedRoute?.segments}
+            routeFeatures={displayedRoute?.route_features}
+            destinationPoint={toNumber(occurrence.latitude) !== null && toNumber(occurrence.longitude) !== null ? { latitude: Number(occurrence.latitude), longitude: Number(occurrence.longitude) } : undefined}
+            occurrenceNature={occurrence.nature}
+            occurrencePriority={occurrence.priority}
+            vehicleVisual={current?.vehicle ? { type: current.vehicle.type, prefix: current.vehicle.prefix, unit_acronym: occurrence.unit?.acronym } : undefined}
+            routeSteps={displayedRoute?.steps}
+            routeSeconds={displayedRoute?.estimated_time_seconds}
+            criticalMode={displayedRoute?.algorithm === 'CRITICAL'}
+            speedSegments={explain ? displayedRoute?.segments ?? null : null}
+            focus={focus}
+            originLabel="Saída da viatura"
+            destinationLabel={`Ocorrência ${occurrence.protocol}`}
+            className={theater
+              ? "h-[78vh] min-h-[420px] w-full"
+              : "h-[45vh] min-h-[320px] w-full sm:h-[420px]"}
+            emptyMessage="Nenhum despacho com rota calculada para esta ocorrência."
+          />
+        </Panel>
 
-        <div className="flex flex-col gap-5">
-          <Panel title="Rota calculada" icon={<RouteIcon className="h-5 w-5" />}>
-            {/* Before a vehicle is sent there is no route to draw, but there
-                is still something worth seeing: where the call is and which
-                stations surround it. */}
-            <RouteMap
-              route={neural?.geometry ?? null}
-              comparison={shortest?.geometry ?? null}
-              stations={stations}
-              selectedStationId={occurrence.unit_id}
-              pin={neural ? null : {
-                latitude: toNumber(occurrence.latitude) ?? 0,
-                longitude: toNumber(occurrence.longitude) ?? 0,
-                label: `Ocorrência ${occurrence.protocol}`,
-              }}
-              theater={theater}
-              onTheaterToggle={() => setTheater((current) => !current)}
-              originLabel="Saída da viatura"
-              destinationLabel={`Ocorrência ${occurrence.protocol}`}
-              className={theater
-                ? "h-[78vh] min-h-[420px] w-full"
-                : "h-[45vh] min-h-[320px] w-full sm:h-[420px]"}
-              emptyMessage="Nenhum despacho com rota calculada para esta ocorrência."
+        <RouteComparison neural={neural} shortest={shortest} />
+
+        {displayedRoute && (
+          <Panel title="Manobras" icon={<ListOrdered className="h-5 w-5" />}>
+            <RouteSteps
+              steps={displayedRoute.steps ?? []}
+              title={`${current?.vehicle?.prefix ?? "Viatura"} → Ocorrência ${occurrence.protocol}`}
+              summary={`${occurrence.address} · ${formatDistance(displayedRoute.distance_meters)} · ${formatDuration(displayedRoute.estimated_time_seconds)} estimados (${routeAlgorithmLabel(displayedRoute.algorithm)})`}
+              onSelect={(step: RouteStep) => setFocus({ latitude: step.location[0], longitude: step.location[1], key: Date.now() })}
             />
           </Panel>
+        )}
 
-          <Panel title="Despachos" icon={<Truck className="h-5 w-5" />}>
-            {dispatchList.length === 0 && (
-              <EmptyState
-                title="Nenhuma viatura despachada"
-                description="Despache uma viatura para que a rota seja calculada pela rede neural."
-              />
-            )}
+        <SceneSupport occurrence={occurrence} />
 
-            <div className="flex flex-col gap-3">
-              {dispatchList.map((dispatch) => (
-                <DispatchCard key={dispatch.id} dispatch={dispatch} onChanged={detail.reload} />
-              ))}
-            </div>
-          </Panel>
-        </div>
+        <OccurrenceReplay occurrence={occurrence} timeline={timeline} stations={stations} />
+
+        <Panel title="Despachos" icon={<Truck className="h-5 w-5" />}>
+          {dispatchList.length === 0 && (
+            <EmptyState
+              title="Nenhuma viatura despachada"
+              description="Despache uma viatura para que a IA calcule a rota operacional."
+            />
+          )}
+
+          <div className="flex flex-col gap-3">
+            {dispatchList.map((dispatch) => (
+              <DispatchCard key={dispatch.id} dispatch={dispatch} onChanged={detail.reload} />
+            ))}
+          </div>
+        </Panel>
       </div>
 
       {editing && (
@@ -233,6 +321,12 @@ export default function OcorrenciaDetalhe() {
   )
 }
 
+function routeAlgorithmLabel(algorithm: RouteVariant["algorithm"]) {
+  if (algorithm === "CRITICAL") return "Modo crítico"
+  if (algorithm === "NEURAL") return "IA"
+  return "Rota padrão"
+}
+
 function Detail({ term, value }: { term: string, value: string }) {
   return (
     <div className="flex flex-wrap items-baseline justify-between gap-2 border-b border-line pb-1.5">
@@ -252,7 +346,7 @@ function RouteComparison({ neural, shortest }: { neural: RouteVariant | null, sh
     return (
       <Panel title="Comparação de rotas" icon={<Brain className="h-5 w-5" />}>
         <p className="text-ink-muted">
-          A comparação aparece assim que uma viatura for despachada e a rede neural responder.
+          A comparação aparece assim que uma viatura for despachada e a IA responder.
         </p>
       </Panel>
     )
@@ -266,14 +360,14 @@ function RouteComparison({ neural, shortest }: { neural: RouteVariant | null, sh
   return (
     <Panel title="Comparação de rotas" icon={<Brain className="h-5 w-5" />}>
       <div className="grid gap-3 sm:grid-cols-2">
-        <Variant title="Rede neural" accent="border-accent" route={neural} />
+        <Variant title="IA" accent="border-accent" route={neural} />
         <Variant title="Menor distância" accent="border-line-strong" route={shortest} />
       </div>
 
       <div className="rounded-sm border border-line bg-surface-muted px-4 py-3">
         {savedSeconds > 0 ? (
           <p className="text-ink">
-            A rota da rede neural chega{" "}
+            A rota da IA chega{" "}
             <strong className="text-ok">{formatDuration(savedSeconds)} antes</strong>{" "}
             ({percent.toFixed(1).replace(".", ",")}% mais rápida), percorrendo{" "}
             {formatDistance(neural.distance_meters - shortest.distance_meters)} a mais.
@@ -282,7 +376,7 @@ function RouteComparison({ neural, shortest }: { neural: RouteVariant | null, sh
           <p className="text-ink">
             Neste trajeto a rota mais curta em metros foi{" "}
             <strong className="text-alert">{formatDuration(Math.abs(savedSeconds))} mais rápida</strong>{" "}
-            que a escolhida pela rede.
+            que a escolhida pela IA.
           </p>
         ) : (
           <p className="text-ink">As duas rotas levam o mesmo tempo estimado.</p>
@@ -294,6 +388,8 @@ function RouteComparison({ neural, shortest }: { neural: RouteVariant | null, sh
           </p>
         )}
       </div>
+
+      <RouteInsight neural={neural} shortest={shortest} />
     </Panel>
   )
 }
@@ -312,6 +408,9 @@ function Variant({ title, accent, route }: { title: string, accent: string, rout
 function DispatchCard({ dispatch, onChanged }: { dispatch: Dispatch, onChanged: () => void }) {
   const advance = useMutation((status: DispatchStatus) => dispatches.updateStatus(dispatch.id, status))
   const next = DISPATCH_NEXT_STATUSES[dispatch.status]
+  const usedRoute = dispatch.used_route
+    ?? dispatch.routes?.find((route) => route.id === dispatch.used_route_id)
+    ?? null
 
   async function handleAdvance(status: DispatchStatus) {
     const updated = await advance.run(status)
@@ -347,6 +446,19 @@ function DispatchCard({ dispatch, onChanged }: { dispatch: Dispatch, onChanged: 
         </p>
       )}
 
+      {usedRoute && (
+        <p className="text-sm text-ink-muted">
+          Rota utilizada:{" "}
+          <strong className="text-ink">
+            {routeAlgorithmLabel(usedRoute.algorithm)}
+          </strong>
+          {" · "}
+          {formatDistance(usedRoute.distance_meters)}
+          {" · "}
+          {formatDuration(usedRoute.estimated_time_seconds)}
+        </p>
+      )}
+
       {advance.error && <ErrorBox message={advance.error} />}
 
       {next.length > 0 && (
@@ -376,6 +488,7 @@ function DispatchModal({ occurrence, onClose, onDispatched }: {
   const fleet = useResource(() => vehicles.list({ status: "DISPONIVEL", per_page: 100 }), [])
   const [vehicleId, setVehicleId] = useState("")
   const [crewId, setCrewId] = useState("")
+  const [criticalMode, setCriticalMode] = useState(false)
 
   // Only the crews already assigned to the chosen vehicle can be sent with it,
   // which is exactly what the backend enforces.
@@ -395,6 +508,7 @@ function DispatchModal({ occurrence, onClose, onDispatched }: {
       occurrence_id: occurrence.id,
       vehicle_id: vehicleId,
       crew_id: crewId || undefined,
+      critical_mode: criticalMode,
     })
 
     if (!result) return
@@ -422,6 +536,13 @@ function DispatchModal({ occurrence, onClose, onDispatched }: {
           </div>
         )}
 
+        <VehicleRecommendations
+          occurrenceId={occurrence.id}
+          criticalMode={criticalMode}
+          selectedId={vehicleId}
+          onChoose={(item) => { setVehicleId(item.vehicle.id); setCrewId(item.crew?.id ?? "") }}
+        />
+
         <Field label="Viatura disponível" required>
           <Select
             value={vehicleId}
@@ -447,6 +568,22 @@ function DispatchModal({ occurrence, onClose, onDispatched }: {
             options={(crewList.data?.items ?? []).map((crew) => ({ value: crew.id, label: crew.name }))}
           />
         </Field>
+
+        <label className="flex cursor-pointer items-start gap-3 rounded-sm border border-alert/30 bg-alert-soft px-4 py-3">
+          <input
+            type="checkbox"
+            checked={criticalMode}
+            onChange={(event) => setCriticalMode(event.target.checked)}
+            className="mt-1 h-4 w-4 shrink-0"
+          />
+          <span className="flex flex-col gap-1">
+            <strong className="text-ink">Usar modo crítico de deslocamento</strong>
+            <span className="text-sm text-ink-muted">
+              Calcula uma alternativa operacional crítica além da IA e da rota
+              padrão, usando exceções de trânsito apenas quando a malha indicar viabilidade.
+            </span>
+          </span>
+        </label>
 
         <div className="flex justify-end gap-2 pt-2">
           <ActionButton tone="ghost" type="button" onClick={onClose}>Cancelar</ActionButton>
