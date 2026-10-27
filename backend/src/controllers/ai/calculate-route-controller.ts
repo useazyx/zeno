@@ -13,6 +13,13 @@ export class CalculateRouteController {
 
       destination_latitude: z.coerce.number({ error: "The destination_latitude is required" }).min(-90).max(90),
       destination_longitude: z.coerce.number({ error: "The destination_longitude is required" }).min(-180).max(180),
+      critical_mode: z.boolean().optional().default(false),
+      trace: z.boolean().optional(),
+      closures: z.array(z.object({
+        latitude: z.coerce.number().min(-90).max(90),
+        longitude: z.coerce.number().min(-180).max(180),
+        radius_m: z.coerce.number().min(5).max(500).default(40)
+      })).max(50).optional(),
 
       dispatch_id: z.uuid({ error: "The dispatch_id must be a valid uuid" }).optional()
     }).refine(
