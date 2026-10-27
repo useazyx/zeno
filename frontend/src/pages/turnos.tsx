@@ -20,6 +20,8 @@ import {
 import { EmptyState, ErrorBox, ErrorDetails, LoadingBlock } from "@/components/layout/feedback"
 import { useMutation, useResource } from "@/hooks/use-resource"
 import { formatDateTime, toLocalInputValue } from "@/lib/format"
+import { PaginatedExport } from "@/components/layout/export-button"
+import { shiftReport } from "@/lib/report-builders"
 
 export default function Turnos() {
   const [page, setPage] = useState(1)
@@ -45,10 +47,16 @@ export default function Turnos() {
         title="Turnos"
         subtitle="Escala de serviço do efetivo"
         actions={(
+          <>
+          <PaginatedExport title="turnos" description="Escala de serviço com bombeiro, unidade e horários de início e término."
+            data={list.data} disabled={list.loading || Boolean(list.error)}
+            fetchPage={(page, per_page) => shifts.list({ page, per_page, type: (type || undefined) as ShiftType | undefined, unit_id: unitId || undefined })}
+            report={(rows, scope) => shiftReport(rows, `${scope} | Tipo: ${SHIFT_TYPE_LABEL[type as ShiftType] ?? "Todos"} | Unidade: ${unitId ? unitList.data?.items.find((u) => u.id === unitId)?.acronym ?? unitId : "Todas"}`)} />
           <ActionButton tone="primary" onClick={() => setCreating(true)}>
             <Plus className="h-5 w-5" />
             Novo turno
           </ActionButton>
+          </>
         )}
       />
 

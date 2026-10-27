@@ -9,6 +9,7 @@
 import { useState } from "react"
 import { Car, Plus } from "lucide-react"
 import type { FormEvent } from "react"
+import { Link } from 'react-router-dom'
 
 import { units, vehicles } from "@/api/endpoints"
 import {
@@ -21,6 +22,9 @@ import {
 } from "@/components/layout/kit"
 import { EmptyState, ErrorBox, ErrorDetails, LoadingBlock } from "@/components/layout/feedback"
 import { useMutation, useResource } from "@/hooks/use-resource"
+import { PaginatedExport } from "@/components/layout/export-button"
+import { vehicleReport } from "@/lib/report-builders"
+import { FleetReplay } from '@/components/operational/fleet-replay'
 
 export default function Viaturas() {
   const [page, setPage] = useState(1)
@@ -46,10 +50,16 @@ export default function Viaturas() {
         title="Viaturas"
         subtitle="Frota e disponibilidade para despacho"
         actions={(
+          <>
+          <PaginatedExport title="viaturas" description="Relação da frota com disponibilidade, unidade e capacidade da guarnição."
+            data={list.data} disabled={list.loading || Boolean(list.error)}
+            fetchPage={(page, per_page) => vehicles.list({ page, per_page, status: (status || undefined) as VehicleStatus | undefined, type: (type || undefined) as VehicleType | undefined })}
+            report={(rows, scope) => vehicleReport(rows, `${scope} | Situação: ${VEHICLE_STATUS_LABEL[status as VehicleStatus] ?? "Todas"} | Tipo: ${VEHICLE_TYPE_LABEL[type as VehicleType] ?? "Todos"}`)} />
           <ActionButton tone="primary" onClick={() => setCreating(true)}>
             <Plus className="h-5 w-5" />
             Nova viatura
           </ActionButton>
+          </>
         )}
       />
 
@@ -93,6 +103,8 @@ export default function Viaturas() {
           <Pagination page={list.data.page} perPage={list.data.per_page} total={list.data.total} onPage={setPage} />
         </Panel>
       )}
+
+      <FleetReplay />
 
       {creating && (
         <CreateVehicleModal
@@ -146,6 +158,7 @@ function VehicleRow({ vehicle, onChanged }: {
       </Cell>
 
       <Cell>
+        <Link to={`/garagem?vehicle=${encodeURIComponent(vehicle.id)}`} className="mr-3 inline-block py-2 text-sm font-semibold text-accent hover:underline">Ver em 3D</Link>
         <ConfirmButton
           label="Excluir"
           confirmLabel="Confirmar"
