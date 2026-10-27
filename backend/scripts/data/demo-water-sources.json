@@ -1,0 +1,422 @@
+[
+  {
+    "code": "HID-0001",
+    "type": "HIDRANTE_COLUNA",
+    "status": "OPERANTE",
+    "address": "Rua Doutor Souza Alves x Rua Jacques Félix",
+    "latitude": -23.0239039,
+    "longitude": -45.5551266,
+    "flow_lpm": 2000,
+    "inspection_days_ago": 139
+  },
+  {
+    "code": "HID-0002",
+    "type": "HIDRANTE_COLUNA",
+    "status": "NAO_VERIFICADO",
+    "address": "Praça Barão do Rio Branco x Rua Visconde do Rio Branco",
+    "latitude": -23.0280352,
+    "longitude": -45.5582305,
+    "flow_lpm": null,
+    "inspection_days_ago": null
+  },
+  {
+    "code": "HID-0003",
+    "type": "HIDRANTE_COLUNA",
+    "status": "INOPERANTE",
+    "address": "Rua Duque de Caxias x Rua Gastão Camara Leal",
+    "latitude": -23.0219065,
+    "longitude": -45.5510773,
+    "flow_lpm": 1800,
+    "inspection_days_ago": 296
+  },
+  {
+    "code": "HID-0004",
+    "type": "HIDRANTE_COLUNA",
+    "status": "OPERANTE",
+    "address": "Avenida Desembarcador Paulo de Oliveira Costa x Rua Otaviano da Costa Vieira",
+    "latitude": -23.0319317,
+    "longitude": -45.5567166,
+    "flow_lpm": 1200,
+    "inspection_days_ago": 133
+  },
+  {
+    "code": "HID-0005",
+    "type": "HIDRANTE_COLUNA",
+    "status": "OPERANTE",
+    "address": "Rua Formosa x Rua Mariano Moreira",
+    "latitude": -23.0295293,
+    "longitude": -45.5494514,
+    "flow_lpm": 1800,
+    "inspection_days_ago": 296
+  },
+  {
+    "code": "HID-0006",
+    "type": "HIDRANTE_SUBTERRANEO",
+    "status": "OPERANTE",
+    "address": "Avenida José Olegário de Barros x Rua Lorena",
+    "latitude": -23.0185721,
+    "longitude": -45.5586601,
+    "flow_lpm": 1800,
+    "inspection_days_ago": 296
+  },
+  {
+    "code": "HID-0007",
+    "type": "HIDRANTE_COLUNA",
+    "status": "OPERANTE",
+    "address": "Avenida Arcênio Riemma x Rua I",
+    "latitude": -22.9925833,
+    "longitude": -45.514263,
+    "flow_lpm": 2000,
+    "inspection_days_ago": 189
+  },
+  {
+    "code": "HID-0008",
+    "type": "HIDRANTE_COLUNA",
+    "status": "OPERANTE",
+    "address": "Rua Cônego José Luiz Pereira Ribeiro x Rua Monsenhor Ascânio Brandão",
+    "latitude": -23.0156165,
+    "longitude": -45.5545736,
+    "flow_lpm": 1800,
+    "inspection_days_ago": 384
+  },
+  {
+    "code": "HID-0009",
+    "type": "HIDRANTE_COLUNA",
+    "status": "INOPERANTE",
+    "address": "Rua Quatro de Março x Travessa Maria Joaquina de Almeida",
+    "latitude": -23.0263418,
+    "longitude": -45.5624847,
+    "flow_lpm": 2000,
+    "inspection_days_ago": 295
+  },
+  {
+    "code": "HID-0010",
+    "type": "HIDRANTE_COLUNA",
+    "status": "OPERANTE",
+    "address": "Avenida dos Bandeirantes x Rua Frederico Ozanan",
+    "latitude": -23.0277656,
+    "longitude": -45.5447547,
+    "flow_lpm": 2000,
+    "inspection_days_ago": 285
+  },
+  {
+    "code": "HID-0011",
+    "type": "HIDRANTE_COLUNA",
+    "status": "OPERANTE",
+    "address": "Avenida Imaculada Conceição x Rua Condessa de Vimeiro",
+    "latitude": -23.0359272,
+    "longitude": -45.5511616,
+    "flow_lpm": 1500,
+    "inspection_days_ago": 380
+  },
+  {
+    "code": "HID-0012",
+    "type": "HIDRANTE_COLUNA",
+    "status": "NAO_VERIFICADO",
+    "address": "Rua Tia Anastacia x Rua Treze de Maio",
+    "latitude": -23.0195567,
+    "longitude": -45.5650683,
+    "flow_lpm": null,
+    "inspection_days_ago": null
+  },
+  {
+    "code": "HID-0013",
+    "type": "HIDRANTE_COLUNA",
+    "status": "INOPERANTE",
+    "address": "Avenida Vereador Rafael Braga x Rua Sete de Setembro",
+    "latitude": -23.017715,
+    "longitude": -45.5482336,
+    "flow_lpm": 1800,
+    "inspection_days_ago": 146
+  },
+  {
+    "code": "HID-0014",
+    "type": "HIDRANTE_COLUNA",
+    "status": "NAO_VERIFICADO",
+    "address": "Rua Edmundo Morewood x Rua Francisco Eugênio de Toledo",
+    "latitude": -23.0239409,
+    "longitude": -45.5672957,
+    "flow_lpm": null,
+    "inspection_days_ago": null
+  },
+  {
+    "code": "HID-0015",
+    "type": "HIDRANTE_COLUNA",
+    "status": "OPERANTE",
+    "address": "Avenida Tiradentes x Rua Doutor Benedito Cursino dos Santos",
+    "latitude": -23.0297735,
+    "longitude": -45.5660578,
+    "flow_lpm": 1000,
+    "inspection_days_ago": 294
+  },
+  {
+    "code": "HID-0016",
+    "type": "HIDRANTE_COLUNA",
+    "status": "OPERANTE",
+    "address": "Avenida Juscelino Kubitschek de Oliveira x Avenida Professor Moreira",
+    "latitude": -23.0330653,
+    "longitude": -45.5614186,
+    "flow_lpm": 1000,
+    "inspection_days_ago": 205
+  },
+  {
+    "code": "HID-0017",
+    "type": "HIDRANTE_COLUNA",
+    "status": "OPERANTE",
+    "address": "Avenida São Pedro x Rua José Vicente de Paula",
+    "latitude": -23.0325489,
+    "longitude": -45.5421321,
+    "flow_lpm": 1500,
+    "inspection_days_ago": 308
+  },
+  {
+    "code": "HID-0018",
+    "type": "HIDRANTE_COLUNA",
+    "status": "OPERANTE",
+    "address": "Rua Coronel Jordão x Rua Doutor Rebouças de Carvalho",
+    "latitude": -23.0279236,
+    "longitude": -45.5537598,
+    "flow_lpm": 1200,
+    "inspection_days_ago": 103
+  },
+  {
+    "code": "HID-0019",
+    "type": "HIDRANTE_SUBTERRANEO",
+    "status": "OPERANTE",
+    "address": "Avenida Oswaldo Aranha x Rua Luís Rosa da Silva",
+    "latitude": -23.0268497,
+    "longitude": -45.540099,
+    "flow_lpm": 800,
+    "inspection_days_ago": 274
+  },
+  {
+    "code": "HID-0020",
+    "type": "HIDRANTE_COLUNA",
+    "status": "INOPERANTE",
+    "address": "Avenida Desembarcador Paulo de Oliveira Costa x Avenida dos Bandeirantes",
+    "latitude": -23.036453,
+    "longitude": -45.5571518,
+    "flow_lpm": 1200,
+    "inspection_days_ago": 371
+  },
+  {
+    "code": "HID-0021",
+    "type": "HIDRANTE_COLUNA",
+    "status": "NAO_VERIFICADO",
+    "address": "Rua Benjamin Constant x Rua Chile",
+    "latitude": -23.0274024,
+    "longitude": -45.5698272,
+    "flow_lpm": null,
+    "inspection_days_ago": null
+  },
+  {
+    "code": "HID-0022",
+    "type": "HIDRANTE_COLUNA",
+    "status": "OPERANTE",
+    "address": "Avenida Prefeito Moacyr Freire x Rua Walton Almeida Boechat",
+    "latitude": -23.0149472,
+    "longitude": -45.563252,
+    "flow_lpm": 2000,
+    "inspection_days_ago": 276
+  },
+  {
+    "code": "HID-0023",
+    "type": "HIDRANTE_COLUNA",
+    "status": "OPERANTE",
+    "address": "Avenida Brigadeiro José Vicente de Faria Lima x Rua Doutor João Dias Cardoso Sobrinho",
+    "latitude": -23.0222977,
+    "longitude": -45.5459556,
+    "flow_lpm": 800,
+    "inspection_days_ago": 23
+  },
+  {
+    "code": "HID-0024",
+    "type": "HIDRANTE_COLUNA",
+    "status": "OPERANTE",
+    "address": "Avenida Francisco Barreto Leme x Avenida José Olegário de Barros",
+    "latitude": -23.0106301,
+    "longitude": -45.550504,
+    "flow_lpm": 1200,
+    "inspection_days_ago": 44
+  },
+  {
+    "code": "HID-0025",
+    "type": "HIDRANTE_COLUNA",
+    "status": "OPERANTE",
+    "address": "Avenida Doutor Pereira Barbosa x Rua Bartolomeu Bueno",
+    "latitude": -23.0101135,
+    "longitude": -45.5573376,
+    "flow_lpm": 1800,
+    "inspection_days_ago": 267
+  },
+  {
+    "code": "HID-0026",
+    "type": "HIDRANTE_COLUNA",
+    "status": "NAO_VERIFICADO",
+    "address": "Avenida Carlos Pedroso da Silva x Estrada Municipal Prefeito Guido Mine",
+    "latitude": -23.0415762,
+    "longitude": -45.6322015,
+    "flow_lpm": null,
+    "inspection_days_ago": null
+  },
+  {
+    "code": "HID-0027",
+    "type": "HIDRANTE_COLUNA",
+    "status": "INOPERANTE",
+    "address": "Alameda Nair Unger Siqueira x Estrada Municipal Amácio Mazzaropi",
+    "latitude": -23.0552592,
+    "longitude": -45.5260945,
+    "flow_lpm": 800,
+    "inspection_days_ago": 336
+  },
+  {
+    "code": "HID-0028",
+    "type": "HIDRANTE_SUBTERRANEO",
+    "status": "OPERANTE",
+    "address": "Rua Marechal Humberto de Alencar Castelo Branco x Rua Marechal Rondon",
+    "latitude": -23.0363714,
+    "longitude": -45.5463334,
+    "flow_lpm": 2000,
+    "inspection_days_ago": 264
+  },
+  {
+    "code": "HID-0029",
+    "type": "HIDRANTE_SUBTERRANEO",
+    "status": "OPERANTE",
+    "address": "Avenida Bandeirantes x Avenida dos Bandeirantes",
+    "latitude": -23.0226471,
+    "longitude": -45.5376469,
+    "flow_lpm": 1000,
+    "inspection_days_ago": 390
+  },
+  {
+    "code": "HID-0030",
+    "type": "HIDRANTE_SUBTERRANEO",
+    "status": "OPERANTE",
+    "address": "Avenida Juscelino Kubitschek de Oliveira x Rua Doutor João Rachou",
+    "latitude": -23.0380046,
+    "longitude": -45.5614966,
+    "flow_lpm": 1500,
+    "inspection_days_ago": 214
+  },
+  {
+    "code": "HID-0031",
+    "type": "HIDRANTE_COLUNA",
+    "status": "OPERANTE",
+    "address": "Avenida Major Waldemar Furquim x Avenida Marginal",
+    "latitude": -23.0588466,
+    "longitude": -45.6306079,
+    "flow_lpm": 1000,
+    "inspection_days_ago": 336
+  },
+  {
+    "code": "HID-0032",
+    "type": "HIDRANTE_COLUNA",
+    "status": "OPERANTE",
+    "address": "Avenida Marcílio Siqueira Frade x Avenida Professor Gentil de Camargo",
+    "latitude": -23.030632,
+    "longitude": -45.5310939,
+    "flow_lpm": 800,
+    "inspection_days_ago": 359
+  },
+  {
+    "code": "HID-0033",
+    "type": "HIDRANTE_COLUNA",
+    "status": "OPERANTE",
+    "address": "Avenida Vila Rica x Rua José do Patrocínio",
+    "latitude": -23.0173986,
+    "longitude": -45.5693855,
+    "flow_lpm": 1200,
+    "inspection_days_ago": 362
+  },
+  {
+    "code": "HID-0034",
+    "type": "HIDRANTE_COLUNA",
+    "status": "NAO_VERIFICADO",
+    "address": "Avenida Grandeiro Guimarães x Rua Conselheiro Moreira de Barros",
+    "latitude": -23.0230719,
+    "longitude": -45.5594646,
+    "flow_lpm": null,
+    "inspection_days_ago": null
+  },
+  {
+    "code": "HID-0035",
+    "type": "HIDRANTE_SUBTERRANEO",
+    "status": "OPERANTE",
+    "address": "Avenida Joaquim Ferreira da Silva x Rua José Cassiano de Freitas",
+    "latitude": -23.0314544,
+    "longitude": -45.5369972,
+    "flow_lpm": 1800,
+    "inspection_days_ago": 340
+  },
+  {
+    "code": "HID-0036",
+    "type": "HIDRANTE_COLUNA",
+    "status": "OPERANTE",
+    "address": "Rua Doutor Emílio Winther x Rua Mariano Moreira Cursino",
+    "latitude": -23.0347783,
+    "longitude": -45.5694149,
+    "flow_lpm": 800,
+    "inspection_days_ago": 269
+  },
+  {
+    "code": "HID-0037",
+    "type": "HIDRANTE_COLUNA",
+    "status": "OPERANTE",
+    "address": "Estrada Municipal Amácio Mazzaropi x Rua Interna Vila Militar",
+    "latitude": -23.0434957,
+    "longitude": -45.5290487,
+    "flow_lpm": 1500,
+    "inspection_days_ago": 139
+  },
+  {
+    "code": "HID-0038",
+    "type": "HIDRANTE_SUBTERRANEO",
+    "status": "NAO_VERIFICADO",
+    "address": "Estrada Municipal dos Remédios x Rua Natale Danelli",
+    "latitude": -23.0469313,
+    "longitude": -45.5227968,
+    "flow_lpm": null,
+    "inspection_days_ago": null
+  },
+  {
+    "code": "HID-0039",
+    "type": "HIDRANTE_COLUNA",
+    "status": "NAO_VERIFICADO",
+    "address": "Avenida Santa Luíza de Marillac x Rua Professor Mário Bordini",
+    "latitude": -23.0174,
+    "longitude": -45.5404564,
+    "flow_lpm": null,
+    "inspection_days_ago": null
+  },
+  {
+    "code": "HID-0040",
+    "type": "HIDRANTE_COLUNA",
+    "status": "NAO_VERIFICADO",
+    "address": "Avenida Maria Aparecida de Jesus x Avenida Padre Valério Cardoso",
+    "latitude": -23.0383647,
+    "longitude": -45.5361005,
+    "flow_lpm": null,
+    "inspection_days_ago": null
+  },
+  {
+    "code": "HID-0041",
+    "type": "HIDRANTE_SUBTERRANEO",
+    "status": "NAO_VERIFICADO",
+    "address": "Avenida Charles Schneider x Avenida Jorge Salim Mutran",
+    "latitude": -23.0248641,
+    "longitude": -45.5734468,
+    "flow_lpm": null,
+    "inspection_days_ago": null
+  },
+  {
+    "code": "HID-0042",
+    "type": "HIDRANTE_COLUNA",
+    "status": "OPERANTE",
+    "address": "Avenida Doutor José Getúlio Monteiro x Rua Thélio Carreira",
+    "latitude": -23.0103927,
+    "longitude": -45.5662279,
+    "flow_lpm": 800,
+    "inspection_days_ago": 257
+  }
+]
