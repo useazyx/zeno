@@ -1,0 +1,82 @@
+.garage-layout { display: grid; grid-template-columns: 205px minmax(0, 1fr) 280px; align-items: start; border: 1px solid var(--color-line); background: var(--color-surface); min-width: 0; }
+.garage-layout button, .garage-layout input, .garage-layout select { border-radius: 2px; }
+.garage-layout button:focus-visible, .garage-layout input:focus-visible, .garage-layout select:focus-visible, .garage-stage:focus-visible { outline: 2px solid var(--color-action); outline-offset: 3px; }
+.garage-layout button { cursor: pointer; }
+.garage-layout button:disabled { cursor: default; opacity: .5; }
+.garage-catalogue { min-width: 0; border-right: 1px solid var(--color-line); }
+.garage-section-title { display: flex; flex-wrap: wrap; gap: 5px 10px; justify-content: space-between; align-items: center; padding: 13px 14px; border-bottom: 1px solid var(--color-line); }
+.garage-section-title h2 { font-size: 12px; font-weight: 650; color: var(--color-ink); }
+.garage-section-title span { font-size: 10px; color: var(--color-ink-muted); }
+.garage-type-list { max-height: 690px; overflow-y: auto; }
+.garage-type { width: 100%; display: grid; grid-template-columns: 77px minmax(0, 1fr); align-items: center; min-height: 81px; padding: 8px 8px 8px 2px; border: 0; border-bottom: 1px solid var(--color-line); text-align: left; color: var(--color-ink); background: transparent; }
+.garage-type[aria-pressed=true] { box-shadow: inset 3px 0 var(--color-action); background: var(--color-surface-muted); }
+.garage-type:hover { background: var(--color-surface-muted); }
+.garage-thumbnail { display: grid; place-items: center; color: var(--color-ink-muted); min-width: 0; }
+.garage-thumbnail img { display: block; width: 90px; height: 60px; object-fit: contain; }
+.garage-type strong { display: block; font-size: 14px; letter-spacing: .025em; }
+.garage-type small { display: block; font-size: 10px; line-height: 1.4; margin-top: 1px; color: var(--color-ink-muted); }
+.garage-type em { display: block; font-style: normal; margin-top: 5px; font-size: 10px; color: var(--color-ink-muted); }
+.garage-viewer { min-width: 0; }
+.garage-stage { min-width: 0; height: clamp(340px, 43vw, 510px); position: relative; background: #202b33; color: #dde6eb; }
+.garage-canvas { position: absolute; inset: 0; }
+.garage-canvas canvas { display: block; width: 100%; height: 100%; touch-action: none; }
+.garage-stage-caption { position: absolute; top: 20px; left: 22px; pointer-events: none; }
+.garage-stage-caption span { display: block; font-size: 9px; letter-spacing: .18em; color: #a9bbc5; }
+.garage-stage-caption strong { display: block; margin-top: 5px; font-size: 22px; font-weight: 600; letter-spacing: -.035em; }
+.garage-stage-axis { position: absolute; right: 20px; top: 21px; font-size: 9px; color: #a9bbc5; pointer-events: none; }
+.garage-canvas-help { position: absolute; left: 16px; right: 16px; bottom: 13px; font-size: 10px; text-align: center; color: #a9bbc5; pointer-events: none; }
+.garage-viewer-error { position: absolute; top: 40%; left: 24px; right: 24px; padding: 14px; background: #293740; font-size: 13px; border-left: 3px solid #c8a760; }
+.garage-views { display: flex; flex-wrap: wrap; gap: 4px; justify-content: center; padding: 10px; border-bottom: 1px solid var(--color-line); }
+.garage-views button { display: inline-flex; align-items: center; justify-content: center; gap: 5px; min-height: 34px; min-width: 44px; padding: 6px 9px; background: transparent; border: 1px solid var(--color-line); font-size: 11px; color: var(--color-ink-muted); }
+.garage-views button[aria-pressed=true] { background: var(--color-surface-muted); color: var(--color-ink); border-color: var(--color-line-strong); }
+.garage-inspection { padding-bottom: 14px; }
+.garage-inspection .garage-section-title { border-bottom: 0; }
+.garage-toggles { display: flex; flex-wrap: wrap; gap: 12px 18px; padding: 0 14px 14px; }
+.garage-toggles label, .garage-export label { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--color-ink); cursor: pointer; }
+.garage-layout input[type=checkbox] { width: 14px; height: 14px; accent-color: var(--color-action); }
+.garage-inspection-bottom { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-end; gap: 14px; padding: 0 14px; }
+.garage-piece { display: grid; gap: 5px; font-size: 10px; color: var(--color-ink-muted); max-width: 100%; }
+.garage-piece select { max-width: 230px; min-height: 33px; background: var(--color-surface); color: var(--color-ink); border: 1px solid var(--color-line-strong); padding: 5px 7px; font-size: 11px; }
+.garage-export { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.garage-export button, .garage-save-actions button { display: flex; align-items: center; justify-content: center; gap: 6px; padding: 8px 10px; min-height: 34px; border: 1px solid var(--color-line-strong); background: var(--color-surface); color: var(--color-ink); font-size: 11px; font-weight: 600; }
+.garage-viewer-note { padding: 13px 14px 0; font-size: 10px; line-height: 1.5; color: var(--color-ink-muted); }
+.garage-measures { position: absolute; left: 14px; bottom: 42px; background: #26333be8; padding: 8px 10px; font-size: 11px; line-height: 1.8; pointer-events: none; }
+.garage-measures strong { margin-right: 9px; }.garage-measures small { font-size: 9px; color: #bdcbd1; }
+.garage-details { border-left: 1px solid var(--color-line); min-width: 0; }
+.garage-details section + section { border-top: 1px solid var(--color-line); }
+.garage-vehicle-title { font-size: 15px; line-height: 1.35; font-weight: 600; margin: 13px 14px 5px; }
+.garage-description { margin: 7px 14px 13px; font-size: 10px; line-height: 1.6; color: var(--color-ink-muted); }
+.garage-field { display: grid; gap: 6px; margin: 12px 14px; color: var(--color-ink-muted); font-size: 10px; }
+.garage-field input, .garage-field select { width: 100%; min-width: 0; min-height: 34px; border: 1px solid var(--color-line-strong); padding: 6px 8px; font-size: 11px; background: var(--color-surface); color: var(--color-ink); }
+.garage-specs { display: grid; grid-template-columns: 1fr 1fr; margin: 12px 14px 14px; gap: 14px 8px; }
+.garage-specs dt { font-size: 10px; color: var(--color-ink-muted); }.garage-specs dd { font-size: 14px; font-weight: 600; margin-top: 3px; font-variant-numeric: tabular-nums; }
+.garage-spec-wide { grid-column: 1 / -1; }.garage-spec-wide dd { font-size: 12px; }
+.garage-palette { display: flex; gap: 8px; margin: 12px 14px; border: 0; padding: 0; }
+.garage-palette legend { font-size: 10px; color: var(--color-ink-muted); margin-bottom: 7px; }
+.garage-palette button { display: grid; place-items: center; width: 33px; height: 28px; border: 1px solid #7a868f; color: #edf2f4; }
+.garage-palette button[aria-pressed=true] { outline: 1px solid var(--color-ink); outline-offset: 2px; }
+.garage-palette button:nth-of-type(2), .garage-palette button:nth-of-type(3) { color: #26333b; }
+.garage-toggles-stack { flex-direction: column; gap: 9px; padding-top: 4px; }
+.garage-save-actions { display: flex; gap: 8px; margin: 0 14px 10px; }
+.garage-save-actions .garage-save { background: var(--color-action); border-color: var(--color-action); color: #f0f3f5; flex: 1; }
+.garage-error { margin: 8px 14px; color: var(--color-danger); font-size: 11px; }
+.garage-compare { margin: 10px 14px; font-size: 10px; }.garage-compare div + div { margin-top: 10px; }.garage-compare dt { font-weight: 650; }.garage-compare dd { margin-top: 3px; color: var(--color-ink-muted); line-height: 1.5; }
+@media (max-width: 1190px) {
+  .garage-layout { grid-template-columns: 174px minmax(0, 1fr); }
+  .garage-details { grid-column: 1 / -1; display: grid; grid-template-columns: 1fr 1fr 1fr; border-left: 0; border-top: 1px solid var(--color-line); }
+  .garage-details section + section { border-top: 0; border-left: 1px solid var(--color-line); }
+  .garage-type-list { max-height: 620px; }
+  .garage-type { grid-template-columns: 62px minmax(0, 1fr); }
+  .garage-thumbnail img { width: 70px; }
+}
+@media (max-width: 700px) {
+  .garage-layout { display: flex; flex-direction: column; }
+  .garage-catalogue { width: 100%; border-right: 0; border-bottom: 1px solid var(--color-line); }
+  .garage-type-list { display: flex; overflow-x: auto; max-height: none; }
+  .garage-type { width: 120px; min-width: 120px; display: flex; flex-direction: column; align-items: flex-start; border-right: 1px solid var(--color-line); border-bottom: 0; padding: 7px 12px; }
+  .garage-type[aria-pressed=true] { box-shadow: inset 0 -3px var(--color-action); }
+  .garage-type small { min-height: 28px; }.garage-thumbnail { align-self: center; }.garage-thumbnail img { width: 100px; height: 54px; }
+  .garage-viewer { width: 100%; }.garage-stage { height: 340px; }.garage-stage-axis { display: none; }
+  .garage-details { display: block; width: 100%; }.garage-details section + section { border-top: 1px solid var(--color-line); border-left: 0; }
+  .garage-canvas-help { font-size: 9px; }.garage-specs { grid-template-columns: repeat(2, 1fr); }
+}
