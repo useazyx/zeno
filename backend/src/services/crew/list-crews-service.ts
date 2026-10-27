@@ -26,7 +26,7 @@ export class ListCrewsService {
           commander: { select: { id: true, war_name: true, rank: true } },
           _count: { select: { members: true } }
         },
-        orderBy: { started_at: "desc" },
+        orderBy: [{ started_at: "desc" }, { id: "desc" }],
         skip: (page - 1) * per_page,
         take: per_page
       }),

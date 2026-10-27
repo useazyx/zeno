@@ -30,7 +30,7 @@ export class ListShiftsService {
           firefighter: { select: { id: true, war_name: true, rank: true } },
           unit: { select: { id: true, acronym: true } }
         },
-        orderBy: { start_at: "asc" },
+        orderBy: [{ start_at: "desc" }, { id: "desc" }],
         skip: (page - 1) * per_page,
         take: per_page
       }),

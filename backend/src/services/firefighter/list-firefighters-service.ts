@@ -32,7 +32,7 @@ export class ListFirefightersService {
         include: {
           unit: { select: { id: true, name: true, acronym: true } }
         },
-        orderBy: { name: "asc" },
+        orderBy: [{ status: "asc" }, { admission_date: "desc" }, { id: "desc" }],
         skip: (page - 1) * per_page,
         take: per_page
       }),
