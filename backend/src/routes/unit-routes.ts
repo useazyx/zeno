@@ -5,8 +5,11 @@ import { ListUnitsController } from "../controllers/unit/list-units-controller.j
 import { GetUnitController } from "../controllers/unit/get-unit-controller.js";
 import { UpdateUnitController } from "../controllers/unit/update-unit-controller.js";
 import { DeleteUnitController } from "../controllers/unit/delete-unit-controller.js";
+import { UnitAreasController } from "../controllers/unit/unit-areas-controller.js";
 
 export async function unitRoutes(fastify: FastifyTypedInstance, plugins: FastifyPluginOptions) {
+
+  fastify.get("/areas", (req, rep) => new UnitAreasController().handle(req, rep))
 
   fastify.get("/", async (req: FastifyRequest, rep: FastifyReply) => {
     return new ListUnitsController().handle(req, rep)
