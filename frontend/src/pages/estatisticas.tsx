@@ -1,46 +1,32 @@
-/**
- * Where the calls come from, and when.
- *
- * Every other screen is about the incident in front of the dispatcher right
- * now. This one is about the record — which parts of the city keep calling,
- * which barely ever do, what they call about, at what hour, how fast the first
- * vehicle gets there, and whether any of that is better or worse than it was
- * last period. It is the screen a commander opens when deciding where a post
- * should be or how a shift should be staffed, not the one an operator watches
- * during a shift.
- *
- * Everything here is computed in the browser from the incident and dispatch
- * lists. That is a deliberate limit, not an oversight: it keeps the backend
- * free of report-shaped endpoints that would each need their own filters,
- * pagination and tests, and it holds comfortably for the thousands of incidents
- * a municipal fire department files in a year. Past that the honest answer is
- * aggregation in SQL, and the screen says so out loud when it hits its ceiling
- * rather than quietly under-reporting.
- */
+/** Incident distributions and server-aggregated operational records by station. */
 
 import { useMemo, useState } from "react"
 import { useNavigate } from "react-router-dom"
 import {
-  CalendarRange, Clock, Flame, Gauge, MapPinned, Repeat, Timer, TrendingDown, TrendingUp,
+  CalendarRange, Clock, Flame, Gauge, MapPinned, Minus, RefreshCw, Repeat, Timer, TrendingDown, TrendingUp,
 } from "lucide-react"
 
-import { ai, dispatches, occurrences, units } from "@/api/endpoints"
+import { ai, occurrences, units } from "@/api/endpoints"
 import {
   NATURE_LABEL, OCCURRENCE_STATUS_LABEL, PRIORITY_LABEL, optionsOf,
 } from "@/api/labels"
 import type {
-  Occurrence, OccurrenceNature, OccurrencePriority, OccurrenceStatus,
+  OccurrenceNature, OccurrencePriority, OccurrenceStatisticsRow, OccurrenceStatus,
 } from "@/api/types"
 import { ActionButton, Field, Page, PageHeader, Panel, Select } from "@/components/layout/kit"
 import { ErrorBox, LoadingBlock } from "@/components/layout/feedback"
 import { HeatGrid, HourHistogram, Ranking, TimeSeries } from "@/components/charts/distribution-charts"
+import { OperationalAnalysis } from "@/components/charts/operational-statistics"
 import type { RankingItem, SeriesPoint } from "@/components/charts/distribution-charts"
-import IncidentMap, { IncidentLegend, UNIT_COLORS } from "@/components/mapa/incident-map"
+import IncidentMap, { IncidentLegend } from "@/components/mapa/incident-map"
+import { UNIT_COLORS } from "@/components/mapa/constants/incident-palette"
 import type { IncidentMapMode, IncidentPoint, RecurrenceCluster } from "@/components/mapa/incident-map"
 import { useResource } from "@/hooks/use-resource"
 import { formatDuration, toNumber } from "@/lib/format"
 import { stationsOf } from "@/lib/geo"
 import { cn } from "@/lib/utils"
+import { ExportButton } from "@/components/layout/export-button"
+import { statisticsReport } from "@/lib/report-builders"
 
 /** Presets, because nobody fights a calendar grid to ask for "last 90 days". */
 const PERIODS = [
@@ -103,18 +89,17 @@ export default function Estatisticas() {
   }
 
   const all = useResource(
-    () => occurrences.listAll({ from, ...filters }),
+    () => occurrences.statistics({ from, ...filters }),
     [from, nature, status, priority],
   )
 
   const earlier = useResource(
     () => previousFrom
-      ? occurrences.listAll({ from: previousFrom, to: previousTo, ...filters })
-      : Promise.resolve({ items: [], total: 0, truncated: false }),
+      ? occurrences.statistics({ from: previousFrom, to: previousTo, ...filters })
+      : Promise.resolve({ items: [], total: 0 }),
     [previousFrom, previousTo, nature, status, priority],
   )
 
-  const dispatchList = useResource(() => dispatches.listAll(), [])
   const unitList = useResource(() => units.list({ active: true }), [])
   const model = useResource(() => ai.model(), [])
 
@@ -288,28 +273,21 @@ export default function Estatisticas() {
    * dispatch carries when the vehicle arrived, and no endpoint returns both.
    */
   const arrivals = useMemo(() => {
-    const openedAt = new Map(items.map((item) => [item.id, new Date(item.opened_at).getTime()]))
     const perIncident = new Map<string, number>()
 
-    for (const dispatch of dispatchList.data?.items ?? []) {
-      if (!dispatch.arrived_at) continue
+    for (const item of items) {
+      if (!item.first_arrived_at) continue
 
-      const opened = openedAt.get(dispatch.occurrence_id)
-      if (opened === undefined) continue
-
-      const minutes = (new Date(dispatch.arrived_at).getTime() - opened) / 60000
+      const opened = new Date(item.opened_at).getTime()
+      const arrived = new Date(item.first_arrived_at).getTime()
+      const minutes = (arrived - opened) / 60000
       if (!Number.isFinite(minutes) || minutes < 0 || minutes > 240) continue
 
-      // The first vehicle on scene is the response; a second one arriving an
-      // hour later is reinforcement, not a slower response.
-      const already = perIncident.get(dispatch.occurrence_id)
-      if (already === undefined || minutes < already) {
-        perIncident.set(dispatch.occurrence_id, minutes)
-      }
+      perIncident.set(item.id, minutes)
     }
 
     return perIncident
-  }, [items, dispatchList.data])
+  }, [items])
 
   const responseByNature = useMemo<RankingItem[]>(() => {
     const groups = new Map<string, number[]>()
@@ -345,7 +323,7 @@ export default function Estatisticas() {
   const closureMinutes = useMemo(() => averageClosure(items), [items])
   const earlierClosure = useMemo(() => averageClosure(earlierItems), [earlierItems])
 
-  const comparable = Boolean(previousFrom) && !earlier.loading
+  const comparable = Boolean(previousFrom) && !earlier.loading && !earlier.error
 
   const priorities = useMemo(() => {
     const counts = new Map<OccurrencePriority, number>()
@@ -373,14 +351,23 @@ export default function Estatisticas() {
   )
 
   return (
-    <Page>
+    <div className="statistics-page"><Page>
       <PageHeader
         title="Estatísticas"
         subtitle="Onde as ocorrências acontecem, quando chegam e quanto tempo levam"
+        actions={<ExportButton title="estatísticas" description={`Resumo e distribuições por natureza, prioridade, situação, unidade e dia. Analisa as ${items.length.toLocaleString("pt-BR")} ocorrências do recorte selecionado; não inclui os detalhes individuais nem o livro de operações por quartel.`}
+          disabled={all.loading || Boolean(all.error) || !items.length}
+          createReport={() => statisticsReport(items, `${periodLabel}${from ? ` (desde ${new Date(from).toLocaleString("pt-BR")})` : ""} | Natureza: ${NATURE_LABEL[nature as OccurrenceNature] ?? "Todas"} | Situação: ${OCCURRENCE_STATUS_LABEL[status as OccurrenceStatus] ?? "Todas"} | Prioridade: ${PRIORITY_LABEL[priority as OccurrencePriority] ?? "Todas"}`)} />}
       />
 
-      {/* One row of filters above everything, scoping every number below it. */}
-      <Panel title="Recorte" icon={<CalendarRange className="h-5 w-5" />}>
+      <nav className="statistics-nav" aria-label="Seções das estatísticas">
+        <a href="#estatisticas-demanda">Demanda e horários</a>
+        <a href="#estatisticas-territorio">Território</a>
+        <a href="#estatisticas-perfil">Perfil dos chamados</a>
+        {all.data?.operational && <a href="#estatisticas-operacao">Atuação operacional</a>}
+      </nav>
+      <Panel className="statistics-filters" title="Recorte da análise" icon={<CalendarRange className="h-5 w-5" />}
+        actions={<span className="statistics-period">{periodLabel}</span>}>
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
           <Field label="Período">
             <Select value={period} onChange={setPeriod} options={PERIODS} />
@@ -414,26 +401,22 @@ export default function Estatisticas() {
           </Field>
         </div>
 
-        <p className="text-sm text-ink-muted">
-          {all.loading
-            ? "Levantando as ocorrências..."
-            : `${items.length.toLocaleString("pt-BR")} ocorrência${items.length === 1 ? "" : "s"} no recorte`}
-          {comparable && ` · ${earlierItems.length.toLocaleString("pt-BR")} no período anterior de mesma duração`}
+        <div className="statistics-filter-summary">
+        <p role="status" className="text-sm text-ink-muted">
+          {all.error ? "Não foi possível carregar este recorte. Tente novamente." : all.loading
+            ? "Levantando o histórico completo..."
+            : `${(all.data?.total ?? 0).toLocaleString("pt-BR")} ocorrência${all.data?.total === 1 ? "" : "s"} no recorte · 100% dos registros considerados`}
+          {!all.error && comparable && ` · ${(earlier.data?.total ?? 0).toLocaleString("pt-BR")} no período anterior de mesma duração`}
         </p>
-
-        {all.data?.truncated && (
-          <p className="rounded-sm border border-warn/30 bg-warn-soft px-4 py-2 text-ink">
-            O recorte tem {all.data.total.toLocaleString("pt-BR")} ocorrências e a tela carrega
-            até mil. Os números abaixo cobrem as mais recentes — estreite o período para um
-            retrato exato.
-          </p>
-        )}
+        {(nature || status || priority || period !== "365") && <button type="button" className="statistics-reset" onClick={() => { setPeriod("365"); setNature(""); setStatus(""); setPriority("") }}>Restaurar recorte</button>}
+        </div>
       </Panel>
 
       {all.error && <ErrorBox message={all.error} onRetry={all.reload} />}
       {all.loading && !all.data && <LoadingBlock label="Carregando as ocorrências..." />}
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="statistics-content" aria-busy={all.loading} inert={all.loading || Boolean(all.error)} hidden={Boolean(all.error)}>
+      <div className="statistics-headline grid gap-px border border-line bg-line sm:grid-cols-2 lg:grid-cols-4">
         <DeltaStat
           icon={<Flame className="h-6 w-6" />}
           label="Ocorrências"
@@ -474,11 +457,51 @@ export default function Estatisticas() {
         />
       </div>
 
+      <div id="estatisticas-demanda" className="statistics-section-heading"><span>01 / DEMANDA</span><p>Volume e distribuição dos chamados no tempo</p></div>
+      <div className="statistics-demand-grid">
+        <Panel className="statistics-volume" title="Volume ao longo do tempo" icon={<TrendingUp className="h-5 w-5" />}>
+          <TimeSeries
+            current={series}
+            previous={comparable && earlierSeries.length === series.length ? earlierSeries : undefined}
+            currentLabel={periodLabel}
+            previousLabel="Período anterior"
+          />
+        </Panel>
+        <Panel className="statistics-hours" title="Ocorrências por hora" icon={<Clock className="h-5 w-5" />}>
+          <HourHistogram counts={byHour} />
+        </Panel>
+        <Panel className="statistics-week" title="Distribuição semanal" icon={<CalendarRange className="h-5 w-5" />}>
+          <HeatGrid rows={WEEKDAYS} values={byWeekdayHour} />
+        </Panel>
+      </div>
+
+      <div id="estatisticas-territorio" className="statistics-section-heading"><span>02 / TERRITÓRIO</span><p>Concentração, distribuição e recorrência das ocorrências</p></div>
       <Panel
         title="Mapa das ocorrências"
         icon={<MapPinned className="h-5 w-5" />}
         actions={<IncidentLegend mode={mapMode} units={legendUnits} />}
       >
+        <div className="statistics-map-metrics">
+          <div className="statistics-map-metric">
+            <p className="label-caps text-ink-soft">Pontos mapeados</p>
+            <p className="mt-0.5 text-xl font-semibold tabular-nums text-ink">
+              {incidents.length.toLocaleString("pt-BR")}
+            </p>
+          </div>
+          <div className="statistics-map-metric">
+            <p className="label-caps text-ink-soft">Locais recorrentes</p>
+            <p className="mt-0.5 text-xl font-semibold tabular-nums text-ink">
+              {recurrences.length.toLocaleString("pt-BR")}
+            </p>
+          </div>
+          <div className="statistics-map-metric">
+            <p className="label-caps text-ink-soft">Quartéis no recorte</p>
+            <p className="mt-0.5 text-xl font-semibold tabular-nums text-ink">
+              {legendUnits.length.toLocaleString("pt-BR")}
+            </p>
+          </div>
+        </div>
+
         <IncidentMap
           incidents={incidents}
           clusters={clusters}
@@ -487,7 +510,7 @@ export default function Estatisticas() {
           mode={mapMode}
           onModeChange={setMapMode}
           onOpen={(id) => navigate(`/ocorrencias/${id}`)}
-          className="h-[58vh] max-h-[700px] min-h-[380px] w-full"
+          className="h-[48vh] max-h-[560px] min-h-[340px] w-full"
         />
 
         <p className="text-sm text-ink-muted">
@@ -495,27 +518,7 @@ export default function Estatisticas() {
         </p>
       </Panel>
 
-      <Panel title="Volume ao longo do tempo" icon={<TrendingUp className="h-5 w-5" />}>
-        <TimeSeries
-          current={series}
-          previous={comparable && earlierSeries.length === series.length ? earlierSeries : undefined}
-          currentLabel={periodLabel}
-          previousLabel="Período anterior"
-        />
-      </Panel>
-
-      <Panel title="Quando os chamados chegam" icon={<Clock className="h-5 w-5" />}>
-        <HeatGrid rows={WEEKDAYS} values={byWeekdayHour} />
-
-        <p className="text-sm text-ink-soft">
-          Cada célula é um dia da semana cruzado com uma hora do dia. É a distribuição que diz
-          em que turno o efetivo precisa estar mais forte — uma noite de sábado e uma noite de
-          terça não são a mesma noite.
-        </p>
-
-        <HourHistogram counts={byHour} />
-      </Panel>
-
+      <div id="estatisticas-perfil" className="statistics-section-heading"><span>03 / PERFIL DOS CHAMADOS</span><p>Natureza, localização e tempo de resposta</p></div>
       <div className="grid gap-4 sm:gap-5 lg:grid-cols-2">
         <Panel title="Onde mais acontece" icon={<TrendingUp className="h-5 w-5" />}>
           <p className="text-sm text-ink-soft">Bairros com mais chamados no recorte.</p>
@@ -542,7 +545,7 @@ export default function Estatisticas() {
           />
         </Panel>
 
-        <Panel title="Por quartel que atendeu" icon={<MapPinned className="h-5 w-5" />}>
+        <Panel title="Por quartel responsável" icon={<MapPinned className="h-5 w-5" />}>
           <Ranking
             items={responders.slice(0, RANKING_SIZE)}
             emptyMessage="Nenhuma ocorrência no recorte."
@@ -583,56 +586,58 @@ export default function Estatisticas() {
 
       <div className="grid gap-4 sm:gap-5 lg:grid-cols-2">
         <Panel title="Por prioridade">
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <div className="statistics-tile-grid">
             {(["CRITICA", "ALTA", "MEDIA", "BAIXA"] as OccurrencePriority[]).map((entry) => (
-              <Tile key={entry} label={PRIORITY_LABEL[entry]} value={priorities.get(entry) ?? 0} />
+              <Tile key={entry} label={PRIORITY_LABEL[entry]} value={priorities.get(entry) ?? 0} total={items.length} tone={entry} />
             ))}
           </div>
         </Panel>
 
         <Panel title="Por situação">
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+          <div className="statistics-tile-grid">
             {(Object.keys(OCCURRENCE_STATUS_LABEL) as OccurrenceStatus[]).map((entry) => (
               <Tile
                 key={entry}
                 label={OCCURRENCE_STATUS_LABEL[entry]}
                 value={statuses.get(entry) ?? 0}
+                total={items.length}
+                tone={entry}
               />
             ))}
           </div>
         </Panel>
       </div>
 
+      {all.data?.operational && <>
+        <div id="estatisticas-operacao" className="statistics-section-heading"><span>04 / ATUAÇÃO OPERACIONAL</span><p>Mobilização, resposta e percursos registrados</p></div>
+        <OperationalAnalysis key={`${from ?? "all"}:${nature}:${status}:${priority}`} data={all.data.operational} filters={{ from, ...filters }} />
+      </>}
+      </div>
       <div className="flex justify-end">
-        <ActionButton tone="neutral" onClick={() => { all.reload(); earlier.reload(); dispatchList.reload() }}>
+        <ActionButton tone="neutral" onClick={() => { all.reload(); earlier.reload() }}>
+          <RefreshCw className="h-4 w-4" />
           Recarregar os números
         </ActionButton>
       </div>
-    </Page>
+    </Page></div>
   )
 }
 
 const MAP_NOTE: Record<IncidentMapMode, string> = {
   heat: "A mancha mostra onde os chamados se concentram — quanto mais escuro, mais ocorrências no mesmo pedaço da cidade.",
   points: "Cada ocorrência é um ponto, colorido pela prioridade e clicável até o registro.",
-  coverage: "Cada ocorrência na cor do quartel que a atendeu, o que desenha o território real de cada posto.",
+  coverage: "Atendimentos na cor do quartel responsável. A distribuição observada não representa limites oficiais de cobertura.",
   recurrence: "Só os endereços que voltaram, com o círculo crescendo conforme o número de chamados.",
 }
 
 // -- pieces -------------------------------------------------------------------
 
-function Tile({ label, value }: { label: string, value: number }) {
-  return (
-    <div className="rounded-sm border border-line bg-surface-muted px-4 py-3">
-      <p className="label-caps text-ink-soft">{label}</p>
-      <p
-        className="text-2xl font-semibold text-ink"
-        style={{ fontVariantNumeric: "tabular-nums" }}
-      >
-        {value}
-      </p>
-    </div>
-  )
+function Tile({ label, value, total, tone }: { label: string; value: number; total: number; tone: string }) {
+  return <div className="statistics-tile" data-tone={tone}>
+    <p>{label}</p><strong>{value.toLocaleString("pt-BR")}</strong>
+    <span>{total ? (value / total * 100).toFixed(1).replace(".", ",") : "0"}% do recorte</span>
+    <div aria-hidden="true"><span style={{ width: `${total ? value / total * 100 : 0}%` }} /></div>
+  </div>
 }
 
 /**
@@ -658,7 +663,7 @@ function DeltaStat({ icon, label, value, hint, current, previous, moreIsBetter }
   const good = change === null ? null : moreIsBetter ? change > 0 : change < 0
 
   return (
-    <div className="flex flex-col gap-1.5 rounded-sm border border-line bg-surface px-4 py-4 sm:px-5">
+    <div className="statistics-delta flex min-w-0 flex-col gap-2 bg-surface px-4 py-5 sm:px-5">
       <div className="flex items-center gap-2 text-ink-muted">
         {icon}
         <p className="label-caps">{label}</p>
@@ -675,10 +680,10 @@ function DeltaStat({ icon, label, value, hint, current, previous, moreIsBetter }
         <p
           className={cn(
             "flex items-center gap-1 text-sm font-semibold",
-            good ? "text-ok" : "text-alert",
+            change === 0 ? "text-ink-muted" : good ? "text-ok" : "text-alert",
           )}
         >
-          {change > 0
+          {change === 0 ? <Minus className="h-4 w-4" /> : change > 0
             ? <TrendingUp className="h-4 w-4" />
             : <TrendingDown className="h-4 w-4" />}
           {change > 0 ? "+" : ""}{change.toFixed(1).replace(".", ",")}% vs. período anterior
@@ -695,11 +700,11 @@ function DeltaStat({ icon, label, value, hint, current, previous, moreIsBetter }
 const average = (values: number[]) =>
   values.reduce((sum, value) => sum + value, 0) / values.length
 
-const isSevere = (item: Occurrence) =>
+const isSevere = (item: OccurrenceStatisticsRow) =>
   item.priority === "ALTA" || item.priority === "CRITICA"
 
 /** Mean minutes from opening to closing, over the incidents that closed. */
-function averageClosure(items: Occurrence[]): number | null {
+function averageClosure(items: OccurrenceStatisticsRow[]): number | null {
   const durations = items.flatMap((item) => {
     if (!item.closed_at || item.status !== "ENCERRADA") return []
 
@@ -717,24 +722,42 @@ function averageClosure(items: Occurrence[]): number | null {
  * week is four. The bucket follows the span so the line always has somewhere
  * between a dozen and forty points on it.
  */
-function bucketize(items: Occurrence[], days: number, end: number): SeriesPoint[] {
-  const span = days || 365
-  const bucketDays = span <= 45 ? 1 : span <= 120 ? 7 : span <= 200 ? 14 : 30
-  const buckets = Math.max(2, Math.ceil(span / bucketDays))
+function bucketize(items: OccurrenceStatisticsRow[], days: number, end: number): SeriesPoint[] {
+  const times = items
+    .map((item) => new Date(item.opened_at).getTime())
+    .filter((time) => Number.isFinite(time))
 
+  const earliest = times.length > 0 ? times.reduce((minimum, time) => Math.min(minimum, time), Infinity) : end - DAY_MS
+  const span = days || Math.max(1, Math.ceil((end - earliest) / DAY_MS))
+
+  const bucketDays = span <= 45
+    ? 1
+    : span <= 120
+      ? 7
+      : span <= 365
+        ? 30
+        : span <= 365 * 3
+          ? 90
+          : 365
+
+  const buckets = Math.max(2, Math.ceil(span / bucketDays))
   const counts = new Array(buckets).fill(0) as number[]
 
-  for (const item of items) {
-    const time = new Date(item.opened_at).getTime()
-    if (Number.isNaN(time)) continue
-
+  for (const time of times) {
     const back = (end - time) / DAY_MS
     const index = buckets - 1 - Math.floor(back / bucketDays)
 
     if (index >= 0 && index < buckets) counts[index] += 1
   }
 
-  const format = new Intl.DateTimeFormat("pt-BR", { day: "2-digit", month: "short" })
+  const format = new Intl.DateTimeFormat(
+    "pt-BR",
+    bucketDays >= 300
+      ? { year: "numeric" }
+      : bucketDays >= 28
+        ? { month: "short", year: "2-digit" }
+        : { day: "2-digit", month: "short" },
+  )
 
   return counts.map((value, index) => ({
     label: format.format(new Date(end - (buckets - 1 - index) * bucketDays * DAY_MS)),
@@ -770,7 +793,7 @@ function districtOf(address: string): string {
   return meaningful[meaningful.length - 1]
 }
 
-function rankBy(items: Occurrence[], keyOf: (item: Occurrence) => string): RankingItem[] {
+function rankBy(items: OccurrenceStatisticsRow[], keyOf: (item: OccurrenceStatisticsRow) => string): RankingItem[] {
   const counts = new Map<string, number>()
 
   for (const item of items) {
