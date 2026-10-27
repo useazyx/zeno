@@ -121,13 +121,19 @@ class PathNetwork(nn.Module):
         x:          torch.Tensor,   # [N, node_feat_size] — features dos nós
         edge_index: torch.Tensor,   # [2, E] — índices das arestas (já 0-based)
         edge_feats: torch.Tensor,   # [E, edge_feat_size] — features das arestas
-    ) -> torch.Tensor:
+        return_attention: bool = False,
+    ):
         """
         Retorna tensor [E, 1] com o custo estimado de cada aresta.
         """
         # Embeddings de nó via GAT
-        h = torch.relu(self.gat1(x, edge_index))   # [N, gat_hidden * gat_heads]
-        h = torch.relu(self.gat2(h, edge_index))   # [N, gat_out_dim]
+        if return_attention:
+            first, attention_1 = self.gat1(x, edge_index, return_attention_weights=True)
+            second, attention_2 = self.gat2(torch.relu(first), edge_index, return_attention_weights=True)
+            h = torch.relu(second)
+        else:
+            h = torch.relu(self.gat1(x, edge_index))
+            h = torch.relu(self.gat2(h, edge_index))
 
         # Para cada aresta u→v, pega embeddings dos dois extremos
         src, dst = edge_index[0], edge_index[1]
@@ -136,7 +142,8 @@ class PathNetwork(nn.Module):
 
         # Concatena embeddings + features da aresta e regride
         combined = torch.cat([h_src, h_dst, edge_feats], dim=1)  # [E, mlp_input]
-        return self.mlp(combined)                                  # [E, 1]
+        prediction = self.mlp(combined)
+        return (prediction, (attention_1, attention_2)) if return_attention else prediction
 
     # ------------------------------------------------------------------
     # Métodos estáticos de extração de features (mantidos compatíveis)
