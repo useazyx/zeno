@@ -52,11 +52,11 @@ export class ListOccurrencesService {
           unit: { select: { id: true, acronym: true } },
           _count: { select: { dispatches: true } }
         },
-        orderBy: sort === "recent"
+        orderBy: sort !== "queue"
           // A feed of what just happened.
-          ? [{ opened_at: "desc" as const }]
+          ? [{ opened_at: "desc" as const }, { id: "desc" as const }]
           // Critical incidents first, then the oldest still waiting.
-          : [{ priority: "desc" as const }, { opened_at: "asc" as const }],
+          : [{ priority: "desc" as const }, { opened_at: "asc" as const }, { id: "asc" as const }],
         skip: (page - 1) * per_page,
         take: per_page
       }),
