@@ -30,4 +30,4 @@ class Decimal {
   }
 }
 
-export const Prisma = { Decimal }
+export const Prisma = { Decimal, DbNull: { __databaseNull: true } }

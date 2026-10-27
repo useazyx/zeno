@@ -11,8 +11,8 @@
 // package.json sem a condicao `types` nos exports ".", o que quebra a
 // resolucao de tipos sob "moduleResolution": "nodenext".
 generator client {
-  provider = "prisma-client"
-  output   = "../src/generated/prisma"
+  provider     = "prisma-client"
+  output       = "../src/generated/prisma"
   moduleFormat = "esm"
 }
 
@@ -139,7 +139,33 @@ enum DispatchStatus {
 /// mantida para comparacao lado a lado no mapa.
 enum RouteAlgorithm {
   NEURAL
+  CRITICAL
   DIJKSTRA
+}
+
+/// O que aconteceu numa ocorrencia, para a linha do tempo.
+enum OccurrenceEventType {
+  ABERTURA
+  STATUS
+  PRIORIDADE
+  DESPACHO
+  DESPACHO_STATUS
+  ROTA
+  NOTA
+}
+
+enum WaterSourceType {
+  HIDRANTE_COLUNA
+  HIDRANTE_SUBTERRANEO
+  CISTERNA
+  RESERVATORIO
+  PONTO_CAPTACAO
+}
+
+enum WaterSourceStatus {
+  OPERANTE
+  INOPERANTE
+  NAO_VERIFICADO
 }
 
 enum TrainingStatus {
@@ -170,11 +196,12 @@ model Unit {
   parent    Unit?   @relation("UnitHierarchy", fields: [parent_id], references: [id], onDelete: Restrict)
   children  Unit[]  @relation("UnitHierarchy")
 
-  firefighters Firefighter[]
-  vehicles     Vehicle[]
-  crews        Crew[]
-  shifts       Shift[]
-  occurrences  Occurrence[]
+  firefighters  Firefighter[]
+  vehicles      Vehicle[]
+  crews         Crew[]
+  shifts        Shift[]
+  occurrences   Occurrence[]
+  water_sources WaterSource[]
 
   created_at DateTime @default(now())
   updated_at DateTime @updatedAt
@@ -199,10 +226,10 @@ model Firefighter {
   unit_id String
   unit    Unit   @relation(fields: [unit_id], references: [id], onDelete: Restrict)
 
-  user         User?
-  crew_members CrewMember[]
-  shifts       Shift[]
-  commanded_crews Crew[] @relation("CrewCommander")
+  user            User?
+  crew_members    CrewMember[]
+  shifts          Shift[]
+  commanded_crews Crew[]       @relation("CrewCommander")
 
   created_at DateTime @default(now())
   updated_at DateTime @updatedAt
@@ -236,25 +263,28 @@ model User {
 // ---------------------------------------------------------------------------
 
 model Vehicle {
-  id                   String        @id @default(uuid())
-  prefix               String        @unique /// Prefixo operacional, ex: "ABT-11201"
-  type                 VehicleType
-  plate                String        @unique
-  model                String
-  year                 Int
-  water_capacity_liters Int?         /// Somente para viaturas com tanque
-  crew_capacity        Int
-  status               VehicleStatus @default(DISPONIVEL)
+  id                    String        @id @default(uuid())
+  prefix                String        @unique /// Prefixo operacional, ex: "ABT-11201"
+  type                  VehicleType
+  plate                 String        @unique
+  model                 String
+  year                  Int
+  water_capacity_liters Int? /// Somente para viaturas com tanque
+  crew_capacity         Int
+  status                VehicleStatus @default(DISPONIVEL)
 
   /// Ultima posicao conhecida; alimenta o rastreamento em tempo real.
   current_latitude  Decimal? @db.Decimal(15, 12)
   current_longitude Decimal? @db.Decimal(15, 12)
+  last_position_at  DateTime?
+  appearance        Json?
 
   unit_id String
   unit    Unit   @relation(fields: [unit_id], references: [id], onDelete: Restrict)
 
   crews      Crew[]
   dispatches Dispatch[]
+  positions  VehiclePosition[]
 
   created_at DateTime @default(now())
   updated_at DateTime @updatedAt
@@ -262,6 +292,24 @@ model Vehicle {
   @@index([unit_id])
   @@index([status])
   @@map("vehicle")
+}
+
+/// Pontos recebidos do terminal, com retenção operacional limitada.
+model VehiclePosition {
+  id          String   @id @default(uuid())
+  vehicle_id  String
+  vehicle     Vehicle  @relation(fields: [vehicle_id], references: [id], onDelete: Cascade)
+  latitude    Decimal  @db.Decimal(15, 12)
+  longitude   Decimal  @db.Decimal(15, 12)
+  heading     Float?
+  dispatch_id String?
+  dispatch    Dispatch? @relation(fields: [dispatch_id], references: [id], onDelete: SetNull)
+  recorded_at DateTime @default(now())
+
+  @@index([vehicle_id, recorded_at])
+  @@index([recorded_at])
+  @@index([dispatch_id])
+  @@map("vehicle_position")
 }
 
 /// Guarnicao: a equipe embarcada em uma viatura durante um turno.
@@ -358,6 +406,7 @@ model Occurrence {
   closed_at DateTime?
 
   dispatches Dispatch[]
+  events     OccurrenceEvent[]
 
   created_at DateTime @default(now())
   updated_at DateTime @updatedAt
@@ -387,12 +436,24 @@ model Dispatch {
   arrived_at    DateTime?
   finished_at   DateTime?
 
-  routes Route[]
+  /// Perfil operacional especial escolhido pelo despacho quando a situação exige.
+  critical_mode Boolean @default(false)
+
+  routes Route[] @relation("DispatchRoutes")
+
+  /// Rota efetivamente adotada no atendimento. Mantém o trajeto histórico
+  /// reproduzível mesmo que o modelo seja atualizado ou a rota seja recalculada.
+  used_route_id String? @unique
+  used_route    Route?  @relation("UsedRoute", fields: [used_route_id], references: [id], onDelete: SetNull)
+
+  events    OccurrenceEvent[]
+  positions VehiclePosition[]
 
   created_at DateTime @default(now())
   updated_at DateTime @updatedAt
 
   @@index([occurrence_id])
+  @@index([occurrence_id, arrived_at])
   @@index([vehicle_id])
   @@index([status])
   @@map("dispatch")
@@ -401,6 +462,56 @@ model Dispatch {
 // ---------------------------------------------------------------------------
 // Integracao com a IA
 // ---------------------------------------------------------------------------
+
+/// Linha do tempo da ocorrencia. Cada mudanca relevante grava uma linha, e o
+/// operador pode acrescentar notas livres, como no registro narrativo de um CAD.
+model OccurrenceEvent {
+  id         String              @id @default(uuid())
+  type       OccurrenceEventType
+  message    String?
+  from_value String?
+  to_value   String?
+
+  occurrence_id String
+  occurrence    Occurrence @relation(fields: [occurrence_id], references: [id], onDelete: Cascade)
+
+  dispatch_id String?
+  dispatch    Dispatch? @relation(fields: [dispatch_id], references: [id], onDelete: SetNull)
+
+  created_at DateTime @default(now())
+
+  @@index([occurrence_id, created_at])
+  @@map("occurrence_event")
+}
+
+/// Ponto de abastecimento de agua: hidrante, cisterna, reservatorio ou ponto
+/// de captacao em rio ou lago. O OpenStreetMap de Taubate nao tem hidrantes
+/// mapeados, entao o cadastro e da propria corporacao.
+model WaterSource {
+  id     String            @id @default(uuid())
+  code   String            @unique
+  type   WaterSourceType
+  status WaterSourceStatus @default(NAO_VERIFICADO)
+
+  address   String
+  latitude  Decimal @db.Decimal(15, 12)
+  longitude Decimal @db.Decimal(15, 12)
+
+  /// Vazao medida no ultimo teste, em litros por minuto.
+  flow_lpm           Int?
+  notes              String?
+  last_inspection_at DateTime?
+
+  unit_id String
+  unit    Unit   @relation(fields: [unit_id], references: [id], onDelete: Restrict)
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  @@index([unit_id])
+  @@index([status])
+  @@map("water_source")
+}
 
 /// Rota calculada pelo servico Python. Guardamos as duas variantes (neural e
 /// mais curta) para permitir a comparacao que o projeto se propoe a demonstrar.
@@ -420,10 +531,17 @@ model Route {
   /// Lista de coordenadas [[lat, lon], ...] que desenha a rota no mapa.
   geometry Json
 
+  /// Manobras curva a curva e custo previsto por trecho, como o servico de IA
+  /// devolveu. Nulos nas rotas gravadas antes de existirem.
+  steps    Json?
+  segments Json?
+
   model_version String?
 
   dispatch_id String?
-  dispatch    Dispatch? @relation(fields: [dispatch_id], references: [id], onDelete: Cascade)
+  dispatch    Dispatch? @relation("DispatchRoutes", fields: [dispatch_id], references: [id], onDelete: Cascade)
+
+  used_by_dispatch Dispatch? @relation("UsedRoute")
 
   created_at DateTime @default(now())
 
@@ -437,14 +555,14 @@ model TrainingRun {
   id     String         @id @default(uuid())
   status TrainingStatus @default(PENDENTE)
 
-  epochs          Int
+  epochs               Int
   /// Ultima epoca reportada pelo treinador, para acompanhar o progresso.
-  current_epoch   Int?
+  current_epoch        Int?
   /// Serie completa de metricas reportadas, uma entrada a cada 50 epocas.
   /// Guardada como JSON porque so e lida inteira, para desenhar a curva.
-  history         Json?
-  train_loss      Float?
-  validation_loss Float?
+  history              Json?
+  train_loss           Float?
+  validation_loss      Float?
   best_validation_loss Float?
 
   started_at  DateTime?
