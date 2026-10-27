@@ -1,0 +1,37 @@
+﻿.neural-explainer { min-width:0; color:var(--color-ink); }
+.neural-specimen { position:relative; height:282px; overflow:hidden; background:#15232c; color:#d9e5e9; }
+.neural-specimen-heading,.neural-specimen-caption { position:absolute; left:18px; right:18px; display:flex; justify-content:space-between; gap:12px; z-index:1; pointer-events:none; }
+.neural-specimen-heading { top:15px; font-size:9px; letter-spacing:.13em; color:#a8bdc7; }
+.neural-specimen-caption { bottom:15px; align-items:baseline; }
+.neural-specimen-caption>span:first-child { font-size:16px; font-weight:500; letter-spacing:-.03em; }
+.neural-specimen-caption>span:last-child { font-size:8px; letter-spacing:.1em; color:#a8bdc7; }
+.neural-brain-view { position:absolute; inset:28px 0 38px; }
+.neural-brain-view canvas { display:block; width:100%; height:100%; cursor:grab; touch-action:pan-y; }
+.neural-brain-view canvas:active { cursor:grabbing; }
+.neural-brain-help { position:absolute; right:10px; top:5px; color:#a8bdc7; font-size:9px; pointer-events:none; }
+.neural-brain-placeholder { height:100%; display:grid; place-content:center; font-size:12px; color:#a8bdc7; }
+.neural-stage-navigation { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); border-bottom:1px solid var(--color-line); }
+.neural-stage-navigation button { position:relative; display:flex; flex-wrap:wrap; align-items:center; justify-content:center; gap:4px; min-height:53px; padding:9px 3px; color:var(--color-ink-muted); font-size:11px; cursor:pointer; border-bottom:2px solid transparent; }
+.neural-stage-navigation button[aria-pressed=true] { color:var(--color-ink); background:var(--color-surface-muted); border-bottom-color:var(--color-accent); }
+.neural-stage-navigation button>svg { position:absolute; right:-5px; color:var(--color-ink-muted); }
+.neural-stage-number { font-size:9px; font-family:monospace; color:var(--color-ink-muted); }
+.neural-stage-copy { padding:18px 0; min-height:154px; }
+.neural-eyebrow { font-size:10px; letter-spacing:.11em; color:var(--color-ink-muted); font-weight:600; }
+.neural-stage-copy h3 { font-size:20px; line-height:1.25; letter-spacing:-.035em; font-weight:600; margin:6px 0 9px; }
+.neural-stage-copy p,.neural-empty { font-size:12px; line-height:1.65; color:var(--color-ink-muted); }
+.neural-evidence { padding:13px; border:1px solid var(--color-line); background:var(--color-surface-muted); }
+.neural-evidence label { display:block; margin-bottom:8px; font-size:9px; font-weight:600; letter-spacing:.08em; color:var(--color-ink-muted); }
+.neural-evidence select { display:block; width:100%; min-width:0; min-height:34px; padding:5px 28px 5px 8px; border:1px solid var(--color-line); background:var(--color-surface); color:var(--color-ink); font-size:12px; text-overflow:ellipsis; }
+.neural-prediction { display:flex; align-items:center; justify-content:space-between; gap:8px; padding-top:12px; }
+.neural-prediction>span { font-size:11px; color:var(--color-ink); }
+.neural-prediction>span>small { display:block; font-size:9px; margin-top:3px; color:var(--color-ink-muted); }
+.neural-prediction>strong { font-size:22px; font-weight:500; font-variant-numeric:tabular-nums; white-space:nowrap; }
+.neural-prediction>strong>small { font-size:12px; color:var(--color-ink-muted); }
+.neural-attention { font-size:11px; line-height:1.6; margin-top:10px; color:var(--color-ink-muted); }
+.neural-explanation-footer { padding-top:12px; }
+.neural-play { display:flex; align-items:center; gap:6px; padding:5px 0; font-size:11px; font-weight:500; min-height:32px; cursor:pointer; }
+.neural-play:disabled { opacity:.55; cursor:default; }
+.neural-explanation-footer p { margin-top:5px; font-size:10px; line-height:1.6; color:var(--color-ink-muted); }
+.neural-explainer :focus-visible { outline:2px solid var(--color-accent); outline-offset:3px; }
+.neural-brain-view canvas:focus-visible { outline-color:#b6d8e7; outline-offset:-4px; }
+@media(max-width:480px) { .neural-specimen { height:250px; } .neural-specimen-heading,.neural-specimen-caption { left:12px; right:12px; } .neural-specimen-caption>span:first-child { font-size:15px; } .neural-stage-navigation button { font-size:10px; } .neural-stage-number { width:100%; } .neural-prediction>strong { font-size:20px; } }
