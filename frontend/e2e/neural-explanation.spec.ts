@@ -1,0 +1,41 @@
+﻿import { test, expect } from '@playwright/test'
+
+test('brain explanation keeps real costs and accessible manual stages', async ({ page }) => {
+  const errors: string[] = []
+  page.on('pageerror', error => errors.push(error.message))
+  page.on('console', message => {
+    if (message.type() === 'error' && /shader|THREE.WebGLProgram/i.test(message.text())) errors.push(message.text())
+  })
+  await page.goto('/rede-neural')
+  const explanation = page.locator('.neural-explainer')
+  await expect(explanation).toBeVisible({ timeout: 60_000 })
+  await explanation.scrollIntoViewIfNeeded()
+  await expect(explanation.locator('.neural-brain-help')).toBeVisible()
+  const canvas = explanation.locator('canvas')
+  await expect(canvas).toHaveAttribute('tabindex', '0')
+  await canvas.focus()
+  await page.keyboard.press('ArrowRight')
+  await page.keyboard.press('Home')
+  await explanation.getByRole('button', { name: '02 Vizinhos' }).click()
+  await expect(explanation.getByRole('heading', { name: 'O entorno imediato importa' })).toBeVisible()
+  await expect(explanation.locator('.neural-attention')).toBeVisible()
+  await explanation.getByRole('button', { name: '04 Previsão' }).click()
+  await expect(explanation.getByRole('heading', { name: 'Um custo para cada trecho' })).toBeVisible()
+  await expect(explanation.locator('.neural-prediction strong')).not.toBeEmpty()
+  await expect(explanation).toContainText('Não representa ativações reais')
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
+  expect(errors).toEqual([])
+})
+
+test('reduced motion preserves all four manual stages', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' })
+  await page.goto('/rede-neural')
+  const explanation = page.locator('.neural-explainer')
+  await expect(explanation).toBeVisible({ timeout: 60_000 })
+  await explanation.scrollIntoViewIfNeeded()
+  await expect(explanation.getByRole('button', { name: 'Ver sequência' })).toBeDisabled()
+  await explanation.getByRole('button', { name: '03 Contexto' }).click()
+  await expect(explanation.getByRole('heading', { name: 'O contexto se amplia' })).toBeVisible()
+  await explanation.getByRole('button', { name: '01 Grafo' }).click()
+  await expect(explanation.getByRole('heading', { name: 'A cidade vira informação' })).toBeVisible()
+})
