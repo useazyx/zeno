@@ -7,6 +7,7 @@ import dotenv from 'dotenv';
 import fastifyRateLimit from "@fastify/rate-limit";
 import { realtimePlugin } from "./plugins/realtime.js";
 import { routes } from "./routes/index.js";
+import { vehicleMonitoringPlugin } from "./plugins/vehicle-monitoring.js";
 
 dotenv.config()
 
@@ -39,6 +40,7 @@ async function start(): Promise<void> {
   await server.register(realtimePlugin, { prefix: "/api/v1" })
 
   await server.register(routes, { prefix: "/api/v1" })
+  await server.register(vehicleMonitoringPlugin)
 
   server.listen({
     host: HTTP_HOST,

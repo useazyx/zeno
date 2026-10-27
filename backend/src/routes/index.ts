@@ -8,6 +8,8 @@ import { shiftRoutes } from "./shift-routes.js";
 import { occurrenceRoutes } from "./occurrence-routes.js";
 import { dispatchRoutes } from "./dispatch-routes.js";
 import { aiRoutes } from "./ai-routes.js";
+import { geoRoutes } from "./geo-routes.js";
+import { waterSourceRoutes } from "./water-source-routes.js";
 
 export async function routes(fastify: FastifyTypedInstance, plugins: FastifyPluginOptions) {
   fastify.get("/ping", async (req: FastifyRequest, rep: FastifyReply) => {
@@ -24,4 +26,6 @@ export async function routes(fastify: FastifyTypedInstance, plugins: FastifyPlug
   await fastify.register(occurrenceRoutes, { prefix: "/occurrences" })
   await fastify.register(dispatchRoutes, { prefix: "/dispatches" })
   await fastify.register(aiRoutes, { prefix: "/ai" })
+  await fastify.register(geoRoutes, { prefix: "/geo" })
+  await fastify.register(waterSourceRoutes, { prefix: "/water-sources" })
 }
