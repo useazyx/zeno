@@ -8,10 +8,12 @@
 
 import { api, query } from "./client"
 import type {
-  Crew, CrewRole, Dispatch, DispatchStatus, Firefighter, FirefighterStatus, ModelInfo,
-  Occurrence, OccurrenceNature, OccurrencePriority, OccurrenceStatus, Paginated, Rank,
-  RoutePreview, RouteVariant, Shift, ShiftType, TrainingRun, Unit, UnitType,
-  Vehicle, VehicleStatus, VehicleType,
+  Closure, Coverage, Crew, EtaAccuracy, CrewRole, Dispatch, DispatchStatus, Firefighter, FirefighterStatus, HospitalOption, ModelInfo,
+  Occurrence, OccurrenceNature, OccurrencePriority, OccurrenceStatisticsRow, OccurrenceStatus, Paginated, Place, Rank,
+  ReferenceRoute, RoutePreview, RouteVariant, Shift, ShiftType, TimelineEntry, TrainingRun, Unit, UnitType,
+  Vehicle, VehicleRecommendation, VehicleStatus, VehicleType, OperationalStatistics, WaterSource, WaterSourceStatus,
+  WaterSourceType, Weather,
+  PositionHistory, FleetHistory, EdgeCosts, UnitAreas, RouteWeather,
 } from "./types"
 
 interface ListParams {
@@ -32,6 +34,7 @@ function paginate<T>(envelope: Record<string, unknown>, key: string): Paginated<
 // -- Units -------------------------------------------------------------------
 
 export const units = {
+  areas: (critical_mode = false) => api.get<UnitAreas>(`/units/areas${query({ critical_mode })}`),
   async list(params: ListParams & { type?: UnitType, parent_id?: string, active?: boolean } = {}): Promise<Paginated<Unit>> {
     const data = await api.get<Record<string, unknown>>(`/units${query({ ...params, per_page: params.per_page ?? 100 })}`)
     return paginate<Unit>(data, "units")
@@ -84,6 +87,8 @@ export const firefighters = {
 // -- Vehicles ----------------------------------------------------------------
 
 export const vehicles = {
+  positions: (id: string, from: string, to: string) => api.get<PositionHistory>(`/vehicles/${id}/positions${query({ from, to })}`),
+  history: (from: string, to: string) => api.get<FleetHistory>(`/vehicles/positions${query({ from, to })}`),
   async list(params: ListParams & { unit_id?: string, type?: VehicleType, status?: VehicleStatus } = {}): Promise<Paginated<Vehicle>> {
     const data = await api.get<Record<string, unknown>>(`/vehicles${query({ ...params })}`)
     return paginate<Vehicle>(data, "vehicles")
@@ -167,23 +172,39 @@ export type OccurrenceListParams = ListParams & {
   from?: string
   to?: string
   /**
-   * `queue` (the default) is the dispatcher's board — most serious first, and
-   * within the same severity whatever has waited longest. `recent` is a feed of
-   * what just happened. The two are opposite orders, so a screen that wants the
-   * latest incidents has to ask for it.
+   * `recent` is the default: newest incidents first. `queue` must be requested
+   * explicitly for a priority-ordered operational queue.
    */
   sort?: "queue" | "recent"
 }
 
 export const occurrences = {
   async list(params: OccurrenceListParams = {}): Promise<Paginated<Occurrence>> {
-    const data = await api.get<Record<string, unknown>>(`/occurrences${query({ ...params })}`)
+    const data = await api.get<Record<string, unknown>>(`/occurrences${query({ sort: "recent", ...params })}`)
     return paginate<Occurrence>(data, "occurrences")
   },
 
   async get(id: string): Promise<Occurrence> {
     const data = await api.get<{ occurrence: Occurrence }>(`/occurrences/${id}`)
     return data.occurrence
+  },
+
+  async statistics(params: Pick<
+    OccurrenceListParams,
+    "status" | "nature" | "priority" | "from" | "to"
+  > = {}): Promise<{ items: OccurrenceStatisticsRow[], total: number, operational?: OperationalStatistics }> {
+    const data = await api.get<{ occurrences: OccurrenceStatisticsRow[], total: number, operational?: OperationalStatistics }>(
+      `/occurrences/statistics${query(params)}`,
+    )
+    return { items: data.occurrences, total: data.total, operational: data.operational }
+  },
+
+  async operationalRecords(params: Pick<OccurrenceListParams, "status" | "nature" | "priority" | "from" | "to"> & {
+    unit_id?: string; search?: string; route_recorded?: "yes" | "no"; page?: number;
+  }) {
+    return api.get<{ items: OperationalStatistics["ledger"]; total: number; page: number; per_page: number }>(
+      `/occurrences/statistics/dispatches${query(params)}`,
+    )
   },
 
   async create(input: {
@@ -198,6 +219,36 @@ export const occurrences = {
   async update(id: string, input: Record<string, unknown>): Promise<Occurrence> {
     const data = await api.patch<{ occurrence: Occurrence }>(`/occurrences/${id}`, input)
     return data.occurrence
+  },
+
+  async timeline(id: string): Promise<TimelineEntry[]> {
+    const data = await api.get<{ events: TimelineEntry[] }>(`/occurrences/${id}/timeline`)
+    return data.events
+  },
+
+  addNote: (id: string, input: { message: string, dispatch_id?: string }) =>
+    api.post<{ event: TimelineEntry }>(`/occurrences/${id}/notes`, input),
+
+  /** Available vehicles ranked by predicted arrival; nothing is written. */
+  recommendations: (id: string, input: { critical_mode?: boolean, closures?: Closure[], limit?: number } = {}) =>
+    api.post<{
+      occurrence_id: string,
+      nature: OccurrenceNature,
+      suitable_types: VehicleType[],
+      critical_mode: boolean,
+      recommendations: VehicleRecommendation[],
+    }>(`/occurrences/${id}/recommendations`, input),
+
+  async hospitals(id: string, criticalMode = false): Promise<HospitalOption[]> {
+    const data = await api.get<{ hospitals: HospitalOption[] }>(
+      `/occurrences/${id}/hospitals${query({ critical_mode: criticalMode || undefined })}`,
+    )
+    return data.hospitals
+  },
+
+  async waterSources(id: string, limit = 5): Promise<WaterSource[]> {
+    const data = await api.get<{ water_sources: WaterSource[] }>(`/occurrences/${id}/water-sources${query({ limit })}`)
+    return data.water_sources
   },
 
   /**
@@ -254,7 +305,12 @@ export const dispatches = {
    * back empty and `message` explains why. Sending a vehicle must never depend
    * on the model being up, so the caller has to tolerate the empty list.
    */
-  create: (input: { occurrence_id: string, vehicle_id: string, crew_id?: string }) =>
+  create: (input: {
+    occurrence_id: string,
+    vehicle_id: string,
+    crew_id?: string,
+    critical_mode?: boolean,
+  }) =>
     api.post<{ dispatch: Dispatch, routes: RouteVariant[], message?: string }>("/dispatches", input),
 
   async updateStatus(id: string, status: DispatchStatus): Promise<Dispatch> {
@@ -301,7 +357,28 @@ export const ai = {
   calculateRoute: (input: {
     origin_unit_id?: string, origin_latitude?: number, origin_longitude?: number,
     destination_latitude: number, destination_longitude: number, dispatch_id?: string,
-  }) => api.post<{ routes: RouteVariant[] | null, neural: RoutePreview, shortest: RoutePreview }>("/ai/routes", input),
+    critical_mode?: boolean, closures?: Closure[], trace?: boolean,
+  }) => api.post<{
+    routes: RouteVariant[] | null,
+    neural: RoutePreview,
+    critical: RoutePreview | null,
+    shortest: RoutePreview,
+    critical_mode: boolean,
+    closures: { count: number, blocked_edges: number },
+    weather?: RouteWeather | null,
+  }>("/ai/routes", input),
+
+  etaAccuracy: (limit = 1000) => api.get<EtaAccuracy>(`/ai/eta-accuracy${query({ limit })}`),
+  edgeCosts: (bbox?: string) => api.get<EdgeCosts>(`/ai/edge-costs${query({ bbox })}`),
+
+  /** Isochrones of the stations and how much recent demand they reach. */
+  coverage: (input: {
+    minutes?: number[],
+    critical_mode?: boolean,
+    unit_ids?: string[],
+    extra_stations?: { latitude: number, longitude: number, label?: string }[],
+    sample_size?: number,
+  } = {}) => api.post<Coverage>("/ai/coverage", input),
 
   async startTraining(epochs: number): Promise<TrainingRun> {
     const data = await api.post<{ run: TrainingRun }>("/ai/training", { epochs })
@@ -317,4 +394,54 @@ export const ai = {
     const data = await api.get<Record<string, unknown>>(`/ai/training${query({ ...params })}`)
     return paginate<TrainingRun>(data, "runs")
   },
+}
+
+// -- Geo ---------------------------------------------------------------------
+
+export const geo = {
+  async search(text: string, signal?: AbortSignal): Promise<Place[]> {
+    const data = await api.get<{ places: Place[] }>(`/geo/search${query({ q: text })}`, signal)
+    return data.places
+  },
+
+  async reverse(latitude: number, longitude: number): Promise<Place | null> {
+    const data = await api.get<{ place: Place | null }>(`/geo/reverse${query({ latitude, longitude })}`)
+    return data.place
+  },
+
+  async referenceRoute(origin: [number, number], destination: [number, number]): Promise<ReferenceRoute | null> {
+    const data = await api.get<{ route: ReferenceRoute | null }>(`/geo/reference-route${query({
+      origin_latitude: origin[0],
+      origin_longitude: origin[1],
+      destination_latitude: destination[0],
+      destination_longitude: destination[1],
+    })}`)
+    return data.route
+  },
+
+  async weather(latitude: number, longitude: number): Promise<Weather> {
+    const data = await api.get<{ weather: Weather }>(`/geo/weather${query({ latitude, longitude })}`)
+    return data.weather
+  },
+}
+
+// -- Water sources -----------------------------------------------------------
+
+export const waterSources = {
+  async list(params: { unit_id?: string, status?: WaterSourceStatus, type?: WaterSourceType } = {}): Promise<WaterSource[]> {
+    const data = await api.get<{ water_sources: WaterSource[] }>(`/water-sources${query(params)}`)
+    return data.water_sources
+  },
+
+  async create(input: Record<string, unknown>): Promise<WaterSource> {
+    const data = await api.post<{ water_source: WaterSource }>("/water-sources", input)
+    return data.water_source
+  },
+
+  async update(id: string, input: Record<string, unknown>): Promise<WaterSource> {
+    const data = await api.patch<{ water_source: WaterSource }>(`/water-sources/${id}`, input)
+    return data.water_source
+  },
+
+  remove: (id: string) => api.delete<void>(`/water-sources/${id}`),
 }
