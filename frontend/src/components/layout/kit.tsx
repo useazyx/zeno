@@ -1,14 +1,15 @@
 /**
  * The shared building blocks every screen is made of.
  *
- * They set the visual language of the console: white panels with a hairline
- * over a cool grey workspace, one steel blue for anything that can be acted
+ * They set the visual language of the console: graphite panels with a hairline
+ * over a dark workspace, one steel blue for anything that can be acted
  * on, quiet chips for status, and oversized tabular figures for the numbers a
  * dispatcher reads at a glance. Colour is spent on meaning and nowhere else.
  */
 
 import { Children, createContext, useContext, useEffect, useState } from "react"
 import type { ChangeEvent, ReactNode } from "react"
+import { Dialog } from "radix-ui"
 
 import { cn } from "@/lib/utils"
 
@@ -22,10 +23,10 @@ export function PageHeader({ title, subtitle, actions }: {
   actions?: ReactNode
 }) {
   return (
-    <div className="flex flex-col gap-3 border-b border-line pb-4 sm:flex-row sm:items-end sm:justify-between">
-      <div>
-        <h1 className="text-xl font-semibold tracking-tight text-ink sm:text-2xl">{title}</h1>
-        {subtitle && <p className="mt-1 text-sm text-ink-muted sm:text-base">{subtitle}</p>}
+    <div className="flex min-w-0 flex-col gap-4 pb-1 sm:flex-row sm:items-end sm:justify-between">
+      <div className="min-w-0">
+        <h1 className="text-2xl font-semibold tracking-tight text-ink sm:text-[1.75rem]">{title}</h1>
+        {subtitle && <p className="mt-1 max-w-4xl text-sm leading-relaxed text-ink-muted">{subtitle}</p>}
       </div>
       {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
     </div>
@@ -33,7 +34,7 @@ export function PageHeader({ title, subtitle, actions }: {
 }
 
 export function Page({ children }: { children: ReactNode }) {
-  return <div className="mx-auto flex w-full max-w-[1600px] flex-col gap-4 px-3 py-4 sm:gap-5 sm:px-4 sm:py-6">{children}</div>
+  return <div className="zeno-page mx-auto flex w-full max-w-[1760px] flex-col gap-4 px-3 py-5 sm:gap-5 sm:px-5 sm:py-6 xl:px-6">{children}</div>
 }
 
 export function Panel({ title, icon, actions, children, className }: {
@@ -44,17 +45,17 @@ export function Panel({ title, icon, actions, children, className }: {
   className?: string
 }) {
   return (
-    <section className={cn("flex flex-col rounded-sm border border-line bg-surface", className)}>
+    <section className={cn("zeno-panel flex flex-col rounded-[2px] border border-line bg-surface", className)}>
       {(title || actions) && (
-        <header className="flex flex-wrap items-center justify-between gap-3 border-b border-line bg-surface-muted px-4 py-2.5 sm:px-5">
+        <header className="zeno-panel-header flex flex-wrap items-center justify-between gap-3 border-b border-line bg-surface-muted px-4 py-2.5">
           <div className="flex items-center gap-2 text-ink-muted">
             {icon}
-            {title && <h2 className="text-sm font-semibold tracking-tight text-ink sm:text-base">{title}</h2>}
+            {title && <h2 className="text-sm font-semibold tracking-tight text-ink">{title}</h2>}
           </div>
           {actions}
         </header>
       )}
-      <div className="flex flex-1 flex-col gap-4 p-4 sm:p-5">{children}</div>
+      <div className="zeno-panel-body flex flex-1 flex-col gap-4 p-4">{children}</div>
     </section>
   )
 }
@@ -72,7 +73,7 @@ export function Panel({ title, icon, actions, children, className }: {
  */
 export function Badge({ tone, children }: { tone: string, children: ReactNode }) {
   return (
-    <span className={cn("label-caps inline-flex items-center whitespace-nowrap rounded-sm border px-2 py-0.5", tone)}>
+    <span className={cn("label-caps inline-flex items-center whitespace-nowrap rounded-[2px] border px-2 py-0.5", tone)}>
       {children}
     </span>
   )
@@ -87,13 +88,13 @@ export function StatBox({ icon, label, value, hint, tone = "text-ink" }: {
   tone?: string
 }) {
   return (
-    <div className="flex flex-col gap-1.5 rounded-sm border border-line bg-surface px-4 py-4 sm:px-5">
+    <div className={cn("zeno-stat flex flex-col gap-2 rounded-[2px] border border-line bg-surface px-4 py-4 sm:px-5", tone)}>
       <div className="flex items-center gap-2 text-ink-muted">
         {icon}
         <p className="label-caps">{label}</p>
       </div>
-      <p className={cn("text-3xl font-semibold tabular-nums tracking-tight sm:text-4xl", tone)}>{value}</p>
-      {hint && <p className="text-sm text-ink-soft">{hint}</p>}
+      <p className="text-3xl font-semibold tabular-nums tracking-tight text-ink sm:text-4xl">{value}</p>
+      {hint && <p className="mt-auto text-xs leading-relaxed text-ink-muted">{hint}</p>}
     </div>
   )
 }
@@ -103,9 +104,9 @@ export function StatBox({ icon, label, value, hint, tone = "text-ink" }: {
 type ButtonTone = "primary" | "neutral" | "danger" | "ghost"
 
 const BUTTON_TONES: Record<ButtonTone, string> = {
-  primary: "border-accent bg-accent text-white hover:bg-accent-strong hover:border-accent-strong",
+  primary: "border-action bg-action text-white hover:bg-action-hover hover:border-action-hover",
   neutral: "border-line-strong bg-surface text-ink hover:bg-surface-muted",
-  danger: "border-alert bg-alert text-white hover:bg-alert-strong hover:border-alert-strong",
+  danger: "border-danger bg-danger text-white hover:bg-danger-hover hover:border-danger-hover",
   ghost: "border-transparent bg-transparent text-ink-muted hover:bg-mute-soft hover:text-ink",
 }
 
@@ -115,7 +116,7 @@ export function ActionButton({ tone = "neutral", className, children, ...props }
     <button
       {...props}
       className={cn(
-        "inline-flex items-center justify-center gap-2 rounded-sm border px-4 py-2 text-sm font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-50",
+        "inline-flex min-h-10 items-center justify-center gap-2 rounded-[2px] border px-4 py-2 text-sm font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-50",
         BUTTON_TONES[tone],
         className,
       )}
@@ -173,7 +174,9 @@ export function Field({ label, hint, required, children }: {
   children: ReactNode
 }) {
   return (
-    <label className="flex flex-col gap-1">
+    // `min-w-0`: a select sized by its longest option must not widen the grid
+    // column it sits in past the screen of a phone.
+    <label className="flex min-w-0 flex-col gap-1">
       <span className="label-caps text-ink-muted">
         {label}
         {required && <span className="text-alert"> *</span>}
@@ -207,7 +210,7 @@ export function FieldButton({ children, className }: {
 }
 
 const CONTROL =
-  "rounded-sm border border-line bg-surface px-3 py-2 text-ink outline-none transition-colors " +
+  "min-h-10 min-w-0 max-w-full rounded-[2px] border border-line-strong bg-canvas px-3 py-2 text-sm text-ink outline-none transition-colors " +
   "placeholder:text-ink-soft focus:border-accent focus:ring-2 focus:ring-accent/20"
 
 export function TextInput(props: React.InputHTMLAttributes<HTMLInputElement>) {
@@ -277,6 +280,13 @@ export function Row({ children, onClick }: { children: ReactNode, onClick?: () =
   return (
     <tr
       onClick={onClick}
+      tabIndex={onClick ? 0 : undefined}
+      onKeyDown={onClick ? (event) => {
+        if (event.target === event.currentTarget && (event.key === "Enter" || event.key === " ")) {
+          event.preventDefault()
+          onClick()
+        }
+      } : undefined}
       className={cn(
         "border-b border-line align-middle",
         onClick && "cursor-pointer transition-colors hover:bg-accent-soft",
@@ -307,7 +317,11 @@ export function Cell({ children, className, title }: {
       data-label={stackLabel}
       className={cn("px-3 py-2.5 text-sm text-ink", className)}
     >
-      {children}
+      {/* On a phone the cell is a flex line of label and value; wrapping the
+          value keeps a cell with several spans as one item that can shrink,
+          instead of laying them side by side past the screen's edge. Above
+          `sm` the wrapper dissolves and the cell is an ordinary cell. */}
+      <div className="min-w-0 [overflow-wrap:anywhere] sm:contents">{children}</div>
     </td>
   )
 }
@@ -371,39 +385,29 @@ export function Modal({ title, onClose, children, wide }: {
   children: ReactNode
   wide?: boolean
 }) {
-  // Escape closes, and the page behind stops scrolling while it is open —
-  // otherwise a wheel at the edge of the dialog scrolls the list underneath.
-  useEffect(() => {
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onClose()
-    }
-
-    const previous = document.body.style.overflow
-    document.body.style.overflow = "hidden"
-    document.addEventListener("keydown", onKey)
-
-    return () => {
-      document.body.style.overflow = previous
-      document.removeEventListener("keydown", onKey)
-    }
-  }, [onClose])
+  const [opener] = useState(() => document.activeElement as HTMLElement | null)
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-chrome/70 backdrop-blur-[2px]">
-      <div className="flex min-h-full items-center justify-center p-3 sm:p-6">
-        <div
-          role="dialog"
-          aria-modal="true"
-          aria-label={title}
+    <Dialog.Root open onOpenChange={(open) => { if (!open) onClose() }}>
+      <Dialog.Portal>
+        <Dialog.Overlay className="zeno-backdrop fixed inset-0 z-50 bg-chrome/70" />
+        <div className="pointer-events-none fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6">
+        <Dialog.Content
+          aria-describedby={undefined}
+          onInteractOutside={(event) => event.preventDefault()}
+          onCloseAutoFocus={(event) => {
+            event.preventDefault()
+            if (opener?.isConnected) opener.focus({ preventScroll: true })
+          }}
           className={cn(
-            "flex max-h-[calc(100dvh-1.5rem)] w-full flex-col rounded-sm border border-line bg-surface shadow-2xl sm:max-h-[calc(100dvh-3rem)]",
+            "zeno-dialog pointer-events-auto flex max-h-[calc(100dvh-1.5rem)] w-full flex-col rounded-sm border border-line bg-surface shadow-2xl sm:max-h-[calc(100dvh-3rem)]",
             wide ? "max-w-4xl" : "max-w-2xl",
           )}
         >
           {/* The dialog wears the console's own chrome, so it reads as part of
               the instrument rather than as a card floating over it. */}
           <header className="flex shrink-0 items-center justify-between gap-3 bg-chrome px-4 py-3 sm:px-5">
-            <h2 className="min-w-0 truncate text-base font-semibold text-chrome-ink sm:text-lg">{title}</h2>
+            <Dialog.Title className="min-w-0 text-base font-semibold text-chrome-ink sm:text-lg">{title}</Dialog.Title>
             <button
               type="button"
               onClick={onClose}
@@ -415,8 +419,9 @@ export function Modal({ title, onClose, children, wide }: {
           </header>
 
           <div className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-5">{children}</div>
+        </Dialog.Content>
         </div>
-      </div>
-    </div>
+      </Dialog.Portal>
+    </Dialog.Root>
   )
 }
