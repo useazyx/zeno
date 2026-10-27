@@ -32,7 +32,7 @@ export class ListVehiclesService {
         include: {
           unit: { select: { id: true, name: true, acronym: true } }
         },
-        orderBy: { prefix: "asc" },
+        orderBy: [{ status: "asc" }, { year: "desc" }, { prefix: "asc" }],
         skip: (page - 1) * per_page,
         take: per_page
       }),

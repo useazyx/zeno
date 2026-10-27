@@ -4,6 +4,7 @@ import { VehicleStatus } from "../../generated/prisma/client.js";
 import { UpdateVehicleService } from "../../services/vehicle/update-vehicle-service.js";
 import { handleError } from "../../errors/handle-error.js";
 import { BadRequestError } from "../../errors/index.js";
+import { vehicleAppearanceSchema } from "../../services/vehicle/vehicle-appearance.js";
 
 export class UpdateVehicleController {
   async handle(req: FastifyRequest, rep: FastifyReply) {
@@ -22,6 +23,8 @@ export class UpdateVehicleController {
       status: z.enum(VehicleStatus).optional(),
       current_latitude: z.coerce.number().min(-90).max(90).optional(),
       current_longitude: z.coerce.number().min(-180).max(180).optional(),
+      heading: z.number().min(0).lt(360).nullable().optional(),
+      appearance: vehicleAppearanceSchema.nullable().optional(),
       unit_id: z.uuid().optional()
     })
 
