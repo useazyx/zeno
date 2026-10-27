@@ -7,7 +7,21 @@ export type RealtimeEvent =
   | { type: "occurrence.updated", payload: { id: string, protocol: string, status: string } }
   | { type: "dispatch.created", payload: { id: string, occurrence_id: string, vehicle_id: string, vehicle_prefix: string, status: string } }
   | { type: "dispatch.updated", payload: { id: string, occurrence_id: string, status: string } }
-  | { type: "vehicle.moved", payload: { id: string, prefix: string, latitude: string, longitude: string } }
+  | { type: "vehicle.moved", payload: { id: string, prefix: string, latitude: string, longitude: string, recorded_at?: string, heading?: number | null } }
+  | { type: "vehicle.alert", payload: VehicleAlertPayload }
+  | { type: "vehicle.alert_cleared", payload: VehicleAlertPayload }
+  | { type: "vehicle.alert_snapshot", payload: { alerts: VehicleAlertPayload[] } }
+  | { type: "occurrence.timeline", payload: { occurrence_id: string } }
+
+export interface VehicleAlertPayload {
+  vehicle_id: string
+  prefix: string
+  dispatch_id: string
+  kind: "sem_sinal" | "parada"
+  since: string
+  latitude?: string
+  longitude?: string
+}
 
 interface Subscriber {
   socket: WebSocket
@@ -17,9 +31,15 @@ interface Subscriber {
 /// project runs. Scaling to several instances would need Redis pub/sub here.
 class EventHub {
   private subscribers = new Set<Subscriber>()
+  private vehicleAlerts = new Map<string, VehicleAlertPayload>()
 
   add(subscriber: Subscriber) {
     this.subscribers.add(subscriber)
+    // O snapshot e a inscrição são síncronos: uma mudança não se perde entre
+    // a leitura do estado e o começo dos eventos ao vivo.
+    if (subscriber.socket.readyState === 1) subscriber.socket.send(JSON.stringify({
+      type: "vehicle.alert_snapshot", payload: { alerts: [...this.vehicleAlerts.values()] }
+    }))
   }
 
   remove(subscriber: Subscriber) {
@@ -31,6 +51,11 @@ class EventHub {
   }
 
   publish(event: RealtimeEvent) {
+    if (event.type === "vehicle.alert" || event.type === "vehicle.alert_cleared") {
+      const key = `${event.payload.dispatch_id}:${event.payload.kind}`
+      if (event.type === "vehicle.alert") this.vehicleAlerts.set(key, event.payload)
+      else this.vehicleAlerts.delete(key)
+    }
     const message = JSON.stringify(event)
 
     for (const subscriber of this.subscribers) {
