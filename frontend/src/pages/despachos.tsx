@@ -86,7 +86,7 @@ export default function Despachos() {
 
       {list.data && list.data.items.length > 0 && (
         <Panel title="Despachos" icon={<Truck className="h-5 w-5" />}>
-          <Table headers={["Viatura", "Ocorrência", "Situação", "Despachado em", "Rota neural", "Ações"]}>
+          <Table headers={["Viatura", "Ocorrência", "Situação", "Despachado em", "Rota utilizada", "Ações"]}>
             {list.data.items.map((dispatch) => (
               <DispatchRow key={dispatch.id} dispatch={dispatch} onChanged={list.reload} />
             ))}
@@ -103,6 +103,10 @@ function DispatchRow({ dispatch, onChanged }: { dispatch: Dispatch, onChanged: (
   const advance = useMutation((status: DispatchStatus) => dispatches.updateStatus(dispatch.id, status))
   const next = DISPATCH_NEXT_STATUSES[dispatch.status]
   const neural = dispatch.routes?.find((route) => route.algorithm === "NEURAL")
+  const critical = dispatch.routes?.find((route) => route.algorithm === "CRITICAL")
+  const usedRoute = dispatch.used_route
+    ?? dispatch.routes?.find((route) => route.id === dispatch.used_route_id)
+    ?? (dispatch.critical_mode ? critical : neural)
 
   async function handleAdvance(status: DispatchStatus) {
     const updated = await advance.run(status)
@@ -142,10 +146,18 @@ function DispatchRow({ dispatch, onChanged }: { dispatch: Dispatch, onChanged: (
       <Cell className="whitespace-nowrap">{formatDateTime(dispatch.dispatched_at)}</Cell>
 
       <Cell className="whitespace-nowrap">
-        {neural ? (
+        {usedRoute ? (
           <>
-            <span className="font-semibold">{formatDuration(neural.estimated_time_seconds)}</span>
-            <span className="block text-sm text-ink-muted">{formatDistance(neural.distance_meters)}</span>
+            <span className="font-semibold">
+              {usedRoute.algorithm === "CRITICAL"
+                ? "Modo crítico"
+                : usedRoute.algorithm === "NEURAL"
+                  ? "IA"
+                  : "Rota padrão"}
+            </span>
+            <span className="block text-sm text-ink-muted">
+              {formatDuration(usedRoute.estimated_time_seconds)} · {formatDistance(usedRoute.distance_meters)}
+            </span>
           </>
         ) : <span className="text-ink-soft">sem rota</span>}
       </Cell>
