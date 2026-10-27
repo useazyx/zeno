@@ -326,6 +326,10 @@ sistema de verdade tem três processos, que sobem **nesta ordem**:
 O PostgreSQL precisa estar rodando. No Windows o cluster fica em `C:\pgsql-data`
 (fora do OneDrive, para não arriscar corrupção por sincronização).
 
+Copie `backend/.env.example` para `backend/.env` e ajuste `DATABASE_URL` com
+o usuário, a senha e o nome de um banco PostgreSQL existente. O arquivo de
+exemplo contém apenas valores de desenvolvimento, sem credenciais reais.
+
 ```bash
 cd backend/
 npx prisma migrate deploy   # aplica as migrations
@@ -423,6 +427,10 @@ Ele é determinístico e grava um backup do que vai apagar em `backend/.backups/
 antes de mexer. **Atenção:** apagar uma ocorrência arrasta seus despachos e as
 rotas calculadas para eles.
 
+O OpenStreetMap não tem hidrantes mapeados em Taubaté. Para a demonstração,
+`npm run seed:water-sources` grava 42 hidrantes em cruzamentos reais de vias
+principais, marcados nas observações como cenário demonstrativo.
+
 ### Principais rotas da API
 
 Nenhuma exige autenticação: o console é aberto por decisão de projeto (veja a
@@ -436,12 +444,19 @@ seção do frontend acima).
 | `/crews` | Guarnições |
 | `/shifts` | Escalas de plantão |
 | `/occurrences` | Ocorrências |
+| `/occurrences/:id/timeline`, `POST /occurrences/:id/notes` | Linha do tempo da ocorrência e notas do operador |
+| `POST /occurrences/:id/recommendations` | Viaturas disponíveis ordenadas pelo tempo de chegada previsto pela IA |
+| `/occurrences/:id/hospitals`, `/occurrences/:id/water-sources` | Hospitais por tempo de ida e pontos de água mais próximos |
 | `/dispatches` | Despacho de viatura para a ocorrência |
-| `/ai/routes`, `/ai/model`, `/ai/training` | Ponte com a IA |
+| `/water-sources` | Cadastro de hidrantes, cisternas e pontos de captação |
+| `/ai/routes`, `/ai/model`, `/ai/training` | Ponte com a IA (`/ai/routes` aceita `closures`: vias interditadas) |
+| `POST /ai/coverage` | Isócronas dos quartéis e quanto da demanda recente elas alcançam |
+| `/geo/search`, `/geo/reverse`, `/geo/weather` | Busca de endereço (Photon/OSM) e clima (Open-Meteo), sem chave |
+| `/geo/reference-route` | Mesmo trajeto no OSRM público, para comparar com a rota da IA (`ROUTER_URL` troca o servidor) |
 | `GET /realtime` | WebSocket com os eventos do despacho |
 
 O WebSocket transmite `occurrence.created`, `occurrence.updated`,
-`dispatch.created`, `dispatch.updated` e `vehicle.moved`. Basta abrir
+`occurrence.timeline`, `dispatch.created`, `dispatch.updated` e `vehicle.moved`. Basta abrir
 `ws://localhost:3333/api/v1/realtime` — não há handshake de autenticação.
 
 ### Ciclo de vida de um despacho
@@ -489,6 +504,17 @@ npm test              # roda a suite uma vez
 npm run test:watch    # modo watch
 npm run test:coverage # com relatório de cobertura
 ```
+
+Os outros dois módulos têm as suas suítes:
+
+```bash
+cd machine/ && poetry run pytest -q    # engine de rotas numa cidade sintética, sem baixar o mapa
+cd frontend/ && npm test               # linguagem das manobras, linha do tempo, paleta, cobertura
+cd frontend/ && npm run test:e2e       # Playwright em 1440 px e 360 px, com a stack no ar
+```
+
+O GitHub Actions (`.github/workflows/ci.yml`) roda backend, frontend e IA a
+cada push.
 
 Cobrem as regras de negócio dos services — hierarquia e ciclos em `Unit`,
 unicidade de CPF/matrícula/placa, a máquina de estados de `Dispatch` e
@@ -655,6 +681,52 @@ git push origin feature/nome-da-tarefa
 ---
 
 ## Dependências Principais
+
+### Atualizar as informações viárias do OSM
+
+As camadas de custo (`GET /ai/edge-costs`), áreas por menor tempo de resposta
+(`GET /units/areas`) e alertas de via usam o grafo real carregado pelo serviço
+Python. Semáforos, paradas, travessias e lombadas agora são preservados como nós;
+pontes, limites de peso/altura/largura e inclinação são atributos extras das vias.
+Uma tag ausente continua ausente, sem preenchimento estimado.
+
+Depois de atualizar `pathfinder.py`, pare o serviço Python e regenere o cache a
+partir de `machine/`. O comando abaixo guarda o cache anterior, sem apagá-lo:
+
+```powershell
+Rename-Item -LiteralPath .\cache -NewName cache-before-road-features
+poetry run python -c "from api.engine import engine; engine.load(); print(engine.graph_size, engine.model_version)"
+poetry run uvicorn api.main:app --host 0.0.0.0 --port 8000
+```
+
+O primeiro carregamento requer conexão ao OpenStreetMap e pode demorar. Caso o
+backup já exista, escolha outro nome antes de executar `Rename-Item`. O OSMnx
+baixa respostas novas para `machine/cache/`; nos próximos inícios reutiliza esse
+cache. O grafo é reconstruído e seus custos são recalculados com o checkpoint
+existente. `PathNetwork.extract_edge_features`, número/ordem das entradas da rede
+e normalização não mudaram: não é necessário retreinar o modelo por essas tags.
+O número de nós pode aumentar porque sinais intermediários são preservados.
+
+Os caches das camadas Python são limpos no carregamento/reload. No Node, as
+chaves incluem `model_version`, bbox ou posição/lista dos quartéis; reinicie o
+Node após regenerar apenas o mapa sem trocar a versão do checkpoint (ou aguarde
+os cinco minutos de validade). Respostas grandes exigem bbox menor em vez de
+omitir ruas silenciosamente. Os polígonos de unidades são calculados por tempo
+de resposta; não representam jurisdição oficial e podem se sobrepor nas bordas
+do buffer de vias, assim como as isócronas.
+
+Para conferir o caminho e o custo contra NetworkX também no mapa de Taubaté:
+
+```powershell
+$env:RUN_REAL_GRAPH_TESTS = "1"
+poetry run pytest tests/test_visual_routing.py -q
+Remove-Item Env:RUN_REAL_GRAPH_TESTS
+```
+
+O rastro `trace: true` registra os nós fechados nas duas frentes do Dijkstra
+bidirecional e amostra no máximo 4.000 pontos por variante, sem persistir o
+rastro no banco. Coordenadas de rastro/rota são `[latitude, longitude]`; GeoJSON
+das camadas segue `[longitude, latitude]`.
 
 ### IA (`machine/`)
 
