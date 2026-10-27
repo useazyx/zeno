@@ -22,7 +22,8 @@
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
     "test:e2e": "node ./scripts/e2e-test.mjs",
-    "seed:occurrences": "tsx ./scripts/seed-occurrences.ts"
+    "seed:occurrences": "tsx ./scripts/seed-occurrences.ts",
+    "seed:water-sources": "tsx ./scripts/seed-water-sources.ts"
   },
   "keywords": [
     "nodejs",
