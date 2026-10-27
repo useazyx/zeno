@@ -1,42 +1,27 @@
 /**
- * Replaces the incident history with a year of plausible calls.
- *
- * The screens that read the past — the statistics page above all — were built
- * against fourteen rows typed by hand while testing, all in two streets and two
- * days. Nothing about that shape can show whether a heat map works, whether a
- * ranking ranks, or whether a recurrence is visible, so this writes a year of
- * incidents with the structure a real record has: neighbourhoods that call far
- * more than others, vegetation fires that arrive with the dry season, a rush
- * that peaks in the late afternoon and a lull at four in the morning, and a
- * handful of addresses that keep coming back.
- *
- * It is synthetic data for a demonstration, not a claim about Taubaté. The
- * streets and neighbourhoods are real so the points land on the street graph;
- * the calls, the callers and their phone numbers are invented.
- *
- * Two things it is careful about:
- *
- *  - Everything it is about to destroy is written to a JSON file first, named
- *    in the output. Deleting an occurrence cascades to its dispatches and to
- *    the routes the AI calculated for them, and none of that comes back.
- *  - It is deterministic. The same seed produces the same year, so a
- *    screenshot taken today still matches the screen tomorrow.
- *
- * Run with: npm run seed:occurrences
+ * Histórico sintético de demonstração: 01/01/2001 a 24/09/2026.
+ * Não representa registros oficiais de Taubaté. Preserva cadastro e treinamentos.
+ * Faz backup antes da substituição e grava ocorrências/despachos em uma transação.
+ * npm run seed:occurrences -- --preview valida o conjunto sem alterar o banco.
  */
 
+import { randomUUID } from "node:crypto"
+import { sampleStreet } from "./demo-geography.js"
+import assert from "node:assert/strict"
 import { mkdirSync, writeFileSync } from "node:fs"
 import { resolve } from "node:path"
 
 import { Prisma } from "../src/generated/prisma/client.js"
 import type {
-  DispatchStatus, OccurrenceNature, OccurrencePriority, OccurrenceStatus,
+  OccurrenceNature, OccurrencePriority, OccurrenceStatus,
 } from "../src/generated/prisma/client.js"
 import { prisma } from "../src/config/prisma.js"
 
-const TOTAL = 320
+const START = Date.parse("2001-01-01T00:00:00-03:00")
+const END = Date.parse("2026-09-24T18:00:00-03:00")
 const DAYS = 365
-const SEED = 20260826
+const SEED = 20260924
+process.env.TZ = "America/Sao_Paulo"
 
 // -- deterministic randomness ------------------------------------------------
 
@@ -456,14 +441,14 @@ function hourFor(profile: NatureProfile): number {
   return intBetween(0, 23)
 }
 
-function makeDraft(now: number): Draft {
+function makeDraft(now: number, days = DAYS): Draft {
   const profile = weightedPick(NATURES.map((entry) => ({ item: entry, weight: entry.weight })))
 
   // The date is drawn first and then kept or rejected against the season, so a
   // vegetation fire lands in August far more often than in February.
   let day = 0
   for (let attempt = 0; attempt < 30; attempt += 1) {
-    day = intBetween(0, DAYS - 1)
+    day = intBetween(0, days - 1)
     if (!profile.season) break
 
     const month = new Date(now - day * DAY_MS).getMonth()
@@ -477,17 +462,18 @@ function makeDraft(now: number): Draft {
     DISTRICTS.map((entry) => ({ item: entry, weight: entry.weight })),
   )
 
+  const location = sampleStreet(district.latitude, district.longitude, random)
+
   return {
     openedAt: date,
     nature: profile.nature,
     priority: weightedPick(profile.priorities),
     description: pick(profile.descriptions),
-    address: `${pick(district.streets)}, ${intBetween(20, 2400)}, ${district.name}, Taubaté`,
+    address: `${location.street}, ${intBetween(20, 2400)}, ${district.name}, Taubaté`,
     district: district.name,
-    // Roughly 350 metres of scatter around the centre, which keeps the point
-    // inside the neighbourhood and near a mapped street.
-    latitude: district.latitude + between(-0.0035, 0.0035),
-    longitude: district.longitude + between(-0.0035, 0.0035),
+    // Sample a real road segment, with a smooth neighbourhood density.
+    latitude: location.latitude,
+    longitude: location.longitude,
   }
 }
 
@@ -560,45 +546,6 @@ function statusFor(ageHours: number): OccurrenceStatus {
   ])
 }
 
-const DISPATCH_STATUS: Record<OccurrenceStatus, DispatchStatus | null> = {
-  ABERTA: null,
-  DESPACHADA: "DESPACHADO",
-  EM_ATENDIMENTO: "NO_LOCAL",
-  ENCERRADA: "FINALIZADO",
-  CANCELADA: "CANCELADO",
-}
-
-// -- the posts that answer -----------------------------------------------------
-
-/**
- * The city had exactly one post in the registry, which makes three of this
- * project's features meaningless: "nearest station" always has one answer,
- * the coverage map has one region, and a ranking by responding unit is a
- * single bar. These three spread the coverage over the city so those features
- * have something to say. They are demonstration data, like everything else
- * here, and are only created if their acronym is missing.
- */
-const EXTRA_POSTS = [
-  {
-    acronym: "PB-AEROPORTO",
-    name: "Posto de Bombeiros do Parque Aeroporto",
-    address: "Avenida Juscelino Kubitschek, 1200, Parque Aeroporto, Taubaté",
-    latitude: -23.0412, longitude: -45.5170, phone: "1236220100",
-  },
-  {
-    acronym: "PB-QUIRIRIM",
-    name: "Posto de Bombeiros de Quiririm",
-    address: "Avenida Domingos Sérgio Falcão, 340, Quiririm, Taubaté",
-    latitude: -23.0472, longitude: -45.6330, phone: "1236220200",
-  },
-  {
-    acronym: "PB-PIRACANGAGUA",
-    name: "Posto de Bombeiros de Piracangaguá",
-    address: "Estrada de Piracangaguá, 2100, Piracangaguá, Taubaté",
-    latitude: -22.9925, longitude: -45.5060, phone: "1236220300",
-  },
-]
-
 interface Responder {
   id: string
   acronym: string
@@ -606,58 +553,6 @@ interface Responder {
   longitude: number
 }
 
-async function ensureStations(): Promise<Responder[]> {
-  const parent = await prisma.unit.findFirst({
-    where: { type: "GRUPAMENTO" },
-    select: { id: true },
-  })
-
-  for (const post of EXTRA_POSTS) {
-    const already = await prisma.unit.findUnique({
-      where: { acronym: post.acronym },
-      select: { id: true },
-    })
-
-    if (already) continue
-
-    await prisma.unit.create({
-      data: {
-        name: post.name,
-        acronym: post.acronym,
-        type: "POSTO",
-        address: post.address,
-        latitude: new Prisma.Decimal(post.latitude),
-        longitude: new Prisma.Decimal(post.longitude),
-        phone: post.phone,
-        parent_id: parent?.id ?? null,
-      },
-    })
-
-    console.log(`Created ${post.acronym}.`)
-  }
-
-  const posts = await prisma.unit.findMany({
-    where: { active: true, type: { in: ["POSTO", "SUBGRUPAMENTO"] } },
-    select: { id: true, acronym: true, latitude: true, longitude: true },
-  })
-
-  return posts.map((post) => ({
-    id: post.id,
-    acronym: post.acronym,
-    latitude: Number(post.latitude),
-    longitude: Number(post.longitude),
-  }))
-}
-
-/**
- * Which post answers a call.
- *
- * Nearly always the closest one, because that is how a dispatch is decided and
- * because it is what makes the coverage map coherent. The rest of the time
- * another post takes it — the nearest was already committed, or the incident
- * needed a vehicle only one of them has. A record where the nearest post
- * always answers would be a record with no mutual aid in it.
- */
 function responderFor(draft: Draft, responders: Responder[]): Responder {
   if (random() > 0.85) return pick(responders)
 
@@ -672,132 +567,138 @@ function responderFor(draft: Draft, responders: Responder[]): Responder {
 // -- the run ------------------------------------------------------------------
 
 async function main() {
-  const responders = await ensureStations()
-
-  if (responders.length === 0) {
-    throw new Error("No active post to answer for: seed the units first.")
-  }
-
-  const vehicles = await prisma.vehicle.findMany({ select: { id: true } })
-
-  // -- backup ---------------------------------------------------------------
-
-  const existing = await prisma.occurrence.findMany({
-    include: { dispatches: { include: { routes: true } } },
+  const posts = await prisma.unit.findMany({
+    where: { active: true, type: { in: ["POSTO", "SUBGRUPAMENTO"] } },
+    select: { id: true, acronym: true, latitude: true, longitude: true },
   })
+  const responders: Responder[] = posts.map((post) => ({
+    ...post, latitude: Number(post.latitude), longitude: Number(post.longitude),
+  }))
+  const vehicles = await prisma.vehicle.findMany({ orderBy: { prefix: "asc" } })
+  const fleet = vehicles.filter((vehicle) => vehicle.status !== "MANUTENCAO" && vehicle.status !== "INDISPONIVEL")
+  assert(responders.length > 0 && fleet.length > 0, "É necessário ter unidades e viaturas disponíveis.")
 
-  const backupDir = resolve(process.cwd(), ".backups")
-  mkdirSync(backupDir, { recursive: true })
+  const drafts: Draft[] = []
+  for (let year = 2001; year <= 2026; year += 1) {
+    const from = Date.parse(`${year}-01-01T00:00:00-03:00`)
+    const until = Math.min(END, Date.parse(`${year + 1}-01-01T00:00:00-03:00`) - 1)
+    const days = Math.ceil((until - from) / DAY_MS)
+    // Crescimento demonstrativo, não uma série demográfica oficial.
+    const count = Math.round((1800 + (year - 2001) * 85) * days / 365.25)
+    for (let index = 0; index < count; index += 1) {
+      let draft: Draft
+      do { draft = makeDraft(until, days) }
+      while (draft.openedAt.getTime() < from || draft.openedAt.getTime() > until)
+      drafts.push(draft)
+    }
+  }
+  drafts.push(...makeHotspotDraft(END).filter((draft) => draft.openedAt.getTime() <= END), ...makeLiveDrafts(END, 9))
+  drafts.sort((a, b) => a.openedAt.getTime() - b.openedAt.getTime())
+  // Inclui explicitamente o primeiro dia, sem depender do sorteio.
+  drafts[0].openedAt.setDate(1)
 
-  const backupPath = resolve(
-    backupDir,
-    `occurrences-${new Date().toISOString().replace(/[:.]/g, "-")}.json`,
-  )
-
-  writeFileSync(backupPath, JSON.stringify(existing, jsonSafe, 2), "utf8")
-  console.log(`Backed up ${existing.length} occurrence(s) to ${backupPath}`)
-
-  // -- replace --------------------------------------------------------------
-
-  const removed = await prisma.occurrence.deleteMany({})
-  console.log(`Deleted ${removed.count} occurrence(s) and everything hanging off them.`)
-
-  const now = Date.now()
-
-  const drafts = [
-    ...Array.from({ length: TOTAL }, () => makeDraft(now)),
-    ...makeHotspotDraft(now),
-    ...makeLiveDrafts(now, 9),
-  ].sort((a, b) => a.openedAt.getTime() - b.openedAt.getTime())
-
+  const occurrences: Prisma.OccurrenceCreateManyInput[] = []
+  const dispatches: Prisma.DispatchCreateManyInput[] = []
   const perYear = new Map<number, number>()
-  let dispatched = 0
+  const availableAt = new Map(fleet.map((vehicle) => [vehicle.id, START]))
+  const busyIds = new Set<string>()
 
   for (const draft of drafts) {
+    const opened = draft.openedAt.getTime()
     const year = draft.openedAt.getFullYear()
     const sequence = (perYear.get(year) ?? 0) + 1
     perYear.set(year, sequence)
-
-    const ageHours = (now - draft.openedAt.getTime()) / (60 * 60 * 1000)
-    const status = statusFor(ageHours)
     const profile = NATURES.find((entry) => entry.nature === draft.nature)!
-
-    const durationMinutes = intBetween(profile.minutes[0], profile.minutes[1])
-    const closedAt = status === "ENCERRADA" || status === "CANCELADA"
-      ? new Date(draft.openedAt.getTime() + durationMinutes * 60 * 1000)
-      : null
-
-    // Two calls in three name the caller; the rest are anonymous or came in
-    // from another agency, which is how the field actually fills in.
-    const named = random() < 0.66
-
-    const occurrence = await prisma.occurrence.create({
-      data: {
-        protocol: `${year}-${String(sequence).padStart(6, "0")}`,
-        nature: draft.nature,
-        priority: draft.priority,
-        status,
-        description: draft.description,
-        address: draft.address,
-        latitude: new Prisma.Decimal(draft.latitude.toFixed(6)),
-        longitude: new Prisma.Decimal(draft.longitude.toFixed(6)),
-        caller_name: named ? pick(CALLER_NAMES) : null,
-        caller_phone: named ? `129${intBetween(6000, 9999)}${intBetween(1000, 9999)}` : null,
-        unit_id: responderFor(draft, responders).id,
-        opened_at: draft.openedAt,
-        closed_at: closedAt,
-      },
-      select: { id: true },
+    const candidateStatus = statusFor((END - opened) / 3600000)
+    const cancelled = candidateStatus === "CANCELADA"
+    const preferred = responderFor(draft, responders)
+    const ordered = [...fleet].sort((a, b) => {
+      const freeA = Math.max(opened, availableAt.get(a.id)!)
+      const freeB = Math.max(opened, availableAt.get(b.id)!)
+      return freeA - freeB || Number(b.unit_id === preferred.id) - Number(a.unit_id === preferred.id)
     })
-
-    const dispatchStatus = DISPATCH_STATUS[status]
-
-    if (dispatchStatus && vehicles.length > 0) {
-      // Dispatched about a minute and a half after the call, on the road for
-      // the first third of the incident.
-      const dispatchedAt = new Date(draft.openedAt.getTime() + intBetween(40, 180) * 1000)
-      const arrivedAt = new Date(dispatchedAt.getTime() + intBetween(3, 16) * 60 * 1000)
-
-      await prisma.dispatch.create({
-        data: {
-          status: dispatchStatus,
-          occurrence_id: occurrence.id,
-          vehicle_id: pick(vehicles).id,
-          dispatched_at: dispatchedAt,
-          arrived_at: dispatchStatus === "DESPACHADO" ? null : arrivedAt,
-          finished_at: closedAt,
-        },
+    const vehicle = ordered[0]
+    const dispatchedAt = Math.max(opened + intBetween(40, 180) * 1000, availableAt.get(vehicle.id)!)
+    const arrivedAt = dispatchedAt + intBetween(3, 18) * 60000
+    const finishedAt = Math.max(opened + intBetween(...profile.minutes) * 60000, arrivedAt + intBetween(10, 35) * 60000)
+    const status: OccurrenceStatus = cancelled ? "CANCELADA"
+      : dispatchedAt > END ? "ABERTA" : arrivedAt > END ? "DESPACHADA"
+      : finishedAt > END ? "EM_ATENDIMENTO" : "ENCERRADA"
+    const closedAt = cancelled ? new Date(Math.min(END, opened + intBetween(2, 12) * 60000))
+      : status === "ENCERRADA" ? new Date(finishedAt) : null
+    const id = randomUUID()
+    occurrences.push({
+      id, protocol: `${year}-${String(sequence).padStart(6, "0")}`,
+      nature: draft.nature, priority: draft.priority, status,
+      description: `${draft.description} [Cenário sintético de demonstração]`,
+      address: draft.address, latitude: new Prisma.Decimal(draft.latitude.toFixed(6)),
+      longitude: new Prisma.Decimal(draft.longitude.toFixed(6)),
+      caller_name: random() < 0.66 ? pick(CALLER_NAMES) : null,
+      caller_phone: null,
+      unit_id: cancelled || status === "ABERTA" ? preferred.id : vehicle.unit_id,
+      opened_at: draft.openedAt, closed_at: closedAt,
+      created_at: draft.openedAt, updated_at: closedAt ?? draft.openedAt,
+    })
+    if (!cancelled && status !== "ABERTA") {
+      dispatches.push({
+        id: randomUUID(), occurrence_id: id, vehicle_id: vehicle.id,
+        status: status === "ENCERRADA" ? "FINALIZADO" : status === "DESPACHADA" ? "DESPACHADO" : "NO_LOCAL",
+        dispatched_at: new Date(dispatchedAt),
+        arrived_at: arrivedAt <= END ? new Date(arrivedAt) : null,
+        finished_at: closedAt, created_at: new Date(dispatchedAt),
+        updated_at: closedAt ?? new Date(Math.min(arrivedAt, END)),
       })
-
-      dispatched += 1
+      availableAt.set(vehicle.id, finishedAt + 15 * 60000)
+      if (!closedAt) busyIds.add(vehicle.id)
     }
   }
 
-  // Nothing is being driven right now except what the open incidents are using,
-  // so every other vehicle goes back to available. Without this the fleet keeps
-  // the commitments of the incidents that were just deleted.
-  const busy = await prisma.dispatch.findMany({
-    where: { status: { in: ["DESPACHADO", "A_CAMINHO", "NO_LOCAL", "RETORNANDO"] } },
-    select: { vehicle_id: true },
-  })
+  assert(perYear.size === 26, "Todos os anos precisam estar representados.")
+  for (const row of occurrences) {
+    const opened = new Date(row.opened_at!).getTime()
+    assert(opened >= START && opened <= END)
+    if (row.closed_at) assert(new Date(row.closed_at).getTime() >= opened && new Date(row.closed_at).getTime() <= END)
+  }
+  const lastFinish = new Map<string, number>()
+  for (const row of dispatches) {
+    const dispatched = new Date(row.dispatched_at!).getTime()
+    assert(dispatched >= (lastFinish.get(row.vehicle_id) ?? START), "Viatura com atendimentos sobrepostos")
+    if (row.arrived_at) assert(new Date(row.arrived_at).getTime() >= dispatched)
+    if (row.finished_at) {
+      assert(row.arrived_at && new Date(row.finished_at).getTime() >= new Date(row.arrived_at).getTime())
+      lastFinish.set(row.vehicle_id, new Date(row.finished_at).getTime())
+    } else lastFinish.set(row.vehicle_id, Infinity)
+  }
+  console.log(JSON.stringify({ synthetic: true, seed: SEED, occurrences: occurrences.length, dispatches: dispatches.length, years: Object.fromEntries(perYear) }, null, 2))
+  if (process.argv.includes("--preview")) {
+    console.log("Prévia validada. Nenhum dado alterado.")
+    await prisma.$disconnect()
+    return
+  }
 
-  const busyIds = [...new Set(busy.map((entry) => entry.vehicle_id))]
-
-  await prisma.vehicle.updateMany({
-    where: { id: { notIn: busyIds }, status: "EMPENHADA" },
-    data: { status: "DISPONIVEL" },
-  })
-
-  await prisma.vehicle.updateMany({
-    where: { id: { in: busyIds } },
-    data: { status: "EMPENHADA" },
-  })
-
-  console.log(
-    `Created ${drafts.length} occurrence(s) over ${DAYS} days, `
-    + `${dispatched} with a dispatch, across ${responders.length} responding unit(s).`,
-  )
-
+  const backupDir = resolve(process.cwd(), ".backups")
+  mkdirSync(backupDir, { recursive: true })
+  const backupPath = resolve(backupDir, `occurrences-${new Date().toISOString().replace(/[:.]/g, "-")}.json`)
+  await prisma.$transaction(async (tx) => {
+    // Bloqueia escritas concorrentes durante a fotografia e a substituição.
+    await tx.$executeRawUnsafe('LOCK TABLE occurrence, dispatch, route, vehicle IN SHARE ROW EXCLUSIVE MODE')
+    const existing = await tx.occurrence.findMany({ include: { dispatches: { include: { routes: true } } } })
+    const originalVehicles = await tx.vehicle.findMany()
+    writeFileSync(backupPath, JSON.stringify({ version: 1, occurrences: existing, vehicles: originalVehicles }, jsonSafe, 2), "utf8")
+    console.log(`Backup de ${existing.length} ocorrências: ${backupPath}`)
+    await tx.occurrence.deleteMany({})
+    for (let offset = 0; offset < occurrences.length; offset += 500) {
+      await tx.occurrence.createMany({ data: occurrences.slice(offset, offset + 500) })
+    }
+    for (let offset = 0; offset < dispatches.length; offset += 500) {
+      await tx.dispatch.createMany({ data: dispatches.slice(offset, offset + 500) })
+    }
+    await tx.vehicle.updateMany({ where: { status: "EMPENHADA", id: { notIn: [...busyIds] } }, data: { status: "DISPONIVEL" } })
+    await tx.vehicle.updateMany({ where: { id: { in: [...busyIds] } }, data: { status: "EMPENHADA" } })
+    assert.equal(await tx.occurrence.count(), occurrences.length)
+    assert.equal(await tx.dispatch.count(), dispatches.length)
+  }, { timeout: 180000, maxWait: 10000 })
+  console.log("Histórico substituído e contagens conferidas. Cadastros e treinamentos preservados.")
   await prisma.$disconnect()
 }
 
