@@ -11,6 +11,7 @@
  */
 
 import { FOLLOW_KMH } from "../constants/constants"
+import type { RouteSegment } from "../../../api/types"
 
 export type LngLat = [number, number]
 
@@ -83,11 +84,17 @@ export interface RouteMetrics {
   center: LngLat
   radius: number
   followDurationMs: number
+  totalSeconds: number
+  timedBySegments: boolean
+  segments: RouteSegment[]
+  distanceAtSeconds: (seconds: number) => number
+  secondsAtDistance: (meters: number) => number
+  speedAtSeconds: (seconds: number) => number
   /** Interpolates the point `d` metres along the route. */
   pointAtDist: (d: number) => LngLat
 }
 
-export function measureRoute(coords: LngLat[]): RouteMetrics {
+export function measureRoute(coords: LngLat[], segments?: RouteSegment[] | null, estimatedSeconds?: number): RouteMetrics {
   const cumulative = [0]
 
   for (let i = 0; i < coords.length - 1; i++) {
@@ -95,6 +102,46 @@ export function measureRoute(coords: LngLat[]): RouteMetrics {
   }
 
   const totalMeters = cumulative[cumulative.length - 1] ?? 0
+  // Geometry determines the distance; edge times determine the pace. Scaling
+  // every edge by the route's rounded ETA would change the speed on shared roads.
+  const ordered = [...(segments ?? [])].sort((a, b) => a.start - b.start)
+  let end = 0
+  const timedBySegments = ordered.length > 0 && ordered.every((segment) => {
+    const valid = Number.isInteger(segment.start) && Number.isInteger(segment.end)
+      && segment.start === end && segment.end > segment.start && segment.end < coords.length
+      && Number.isFinite(segment.time_seconds) && segment.time_seconds > 0
+    end = segment.end
+    return valid
+  }) && end === coords.length - 1
+  const times = [0]
+  const distances = [0]
+  if (timedBySegments) {
+    for (const segment of ordered) {
+      times.push(times[times.length - 1] + segment.time_seconds)
+      distances.push(cumulative[segment.end])
+    }
+  } else {
+    times.push(estimatedSeconds && Number.isFinite(estimatedSeconds) && estimatedSeconds > 0
+      ? estimatedSeconds : totalMeters / (FOLLOW_KMH / 3.6))
+    distances.push(totalMeters)
+  }
+  const totalSeconds = times[times.length - 1]
+  const interval = (values: number[], value: number) => {
+    let low = 0
+    let high = values.length - 2
+    while (low < high) {
+      const middle = Math.floor((low + high) / 2)
+      if (values[middle + 1] <= value) low = middle + 1
+      else high = middle
+    }
+    return low
+  }
+  const interpolate = (from: number[], to: number[], value: number) => {
+    const clamped = Math.max(0, Math.min(value, from[from.length - 1]))
+    const index = interval(from, clamped)
+    const span = from[index + 1] - from[index]
+    return to[index] + (to[index + 1] - to[index]) * (span > 0 ? (clamped - from[index]) / span : 0)
+  }
 
   const pointAtDist = (d: number): LngLat => {
     if (coords.length === 0) return [0, 0]
@@ -122,6 +169,16 @@ export function measureRoute(coords: LngLat[]): RouteMetrics {
     radius: routeRadius(coords),
     // The original playback speed: a walkthrough, not a simulation.
     followDurationMs: (totalMeters / 1000 / FOLLOW_KMH) * 1_600_000,
+    totalSeconds,
+    timedBySegments,
+    segments: timedBySegments ? ordered : [],
+    distanceAtSeconds: (seconds) => interpolate(times, distances, seconds),
+    secondsAtDistance: (meters) => interpolate(distances, times, meters),
+    speedAtSeconds: (seconds) => {
+      if (seconds >= totalSeconds || totalSeconds <= 0) return 0
+      const index = interval(times, Math.max(0, seconds))
+      return (distances[index + 1] - distances[index]) / (times[index + 1] - times[index]) * 3.6
+    },
     pointAtDist,
   }
 }
