@@ -6,7 +6,7 @@
  * hooks cover both without adding a dependency.
  */
 
-import { useCallback, useEffect, useRef, useState } from "react"
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react"
 
 import { ApiError } from "@/api/client"
 import { translateMessage } from "@/api/messages"
@@ -40,11 +40,15 @@ export function useResource<T>(
 
   // Keeping the fetcher in a ref means callers can pass an inline arrow
   // function without it retriggering the effect on every render.
+  // Refreshed in a layout effect, which runs before the fetching effect below.
   const fetcherRef = useRef(fetcher)
-  fetcherRef.current = fetcher
+  useLayoutEffect(() => { fetcherRef.current = fetcher })
 
   useEffect(() => {
     if (!enabled) {
+      // A disabled resource is simply not loading; there is no external system
+      // to subscribe to, so this one synchronous update is the honest way.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setLoading(false)
       return
     }
@@ -97,7 +101,7 @@ export function useMutation<TInput, TResult>(
   const [details, setDetails] = useState<string[] | null>(null)
 
   const actionRef = useRef(action)
-  actionRef.current = action
+  useLayoutEffect(() => { actionRef.current = action })
 
   const run = useCallback(async (input: TInput): Promise<TResult | null> => {
     setSubmitting(true)

@@ -5,9 +5,10 @@
  * events subscribes to the same connection instead of opening its own.
  */
 
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useLayoutEffect, useRef, useState } from "react"
 
 import { realtimeUrl } from "@/api/client"
+import type { VehicleAlert } from "@/api/types"
 
 export type RealtimeEvent =
   | { type: "connected", payload?: unknown }
@@ -15,7 +16,11 @@ export type RealtimeEvent =
   | { type: "occurrence.updated", payload: { id: string, protocol: string, status: string } }
   | { type: "dispatch.created", payload: { id: string, occurrence_id: string, vehicle_id: string, vehicle_prefix: string, status: string } }
   | { type: "dispatch.updated", payload: { id: string, occurrence_id: string, status: string } }
-  | { type: "vehicle.moved", payload: { id: string, prefix: string, latitude: string, longitude: string } }
+  | { type: "vehicle.moved", payload: { id: string, prefix: string, latitude: string, longitude: string, recorded_at?: string, heading?: number | null } }
+  | { type: "vehicle.alert", payload: VehicleAlert }
+  | { type: "vehicle.alert_snapshot", payload: { alerts: VehicleAlert[] } }
+  | { type: "vehicle.alert_cleared", payload: { vehicle_id: string, dispatch_id: string, kind?: "sem_sinal" | "parada" } }
+  | { type: "occurrence.timeline", payload: { occurrence_id: string } }
 
 type Listener = (event: RealtimeEvent) => void
 
@@ -86,7 +91,8 @@ function disconnectIfIdle() {
  */
 export function useRealtime(onEvent: (event: RealtimeEvent) => void) {
   const handlerRef = useRef(onEvent)
-  handlerRef.current = onEvent
+  // Updated after render, never during it; events only arrive later anyway.
+  useLayoutEffect(() => { handlerRef.current = onEvent })
 
   const [isConnected, setIsConnected] = useState(connected)
 

@@ -7,14 +7,13 @@
  * in a narrow one. Measuring costs one observer and keeps every stroke exact.
  */
 
-import { useEffect, useRef, useState } from "react"
+import { useCallback, useState } from "react"
 
 export function useMeasure() {
-  const ref = useRef<HTMLDivElement>(null)
   const [width, setWidth] = useState(0)
 
-  useEffect(() => {
-    const node = ref.current
+  // React attaches the observer when a chart leaves its empty state as well.
+  const ref = useCallback((node: HTMLDivElement | null) => {
     if (!node) return
 
     const observer = new ResizeObserver(([entry]) => setWidth(entry.contentRect.width))
