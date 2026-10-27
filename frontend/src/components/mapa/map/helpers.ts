@@ -2,14 +2,18 @@ import maplibregl from "maplibre-gl"
 
 import type { GraphBounds } from "@/api/types"
 
-/**
- * `essential: true` on every camera move.
- *
- * Without it MapLibre skips the animation when the browser reports
- * `prefers-reduced-motion` — which Windows does whenever "show animations" is
- * off — and the `moveend` that the orbit and the playback wait for fires
- * synchronously, before anything is listening for it.
- */
+/** Reserve the toolbar's actual height, including wrapped controls on small screens. */
+export function observeMapToolbar(wrap: HTMLElement, toolbar: HTMLElement, map: maplibregl.Map) {
+  const update = () => {
+    wrap.style.setProperty("--map-toolbar-height", `${toolbar.offsetHeight}px`)
+    map.resize()
+  }
+  const observer = new ResizeObserver(update)
+  observer.observe(toolbar)
+  update()
+  return () => observer.disconnect()
+}
+
 export const fitRoute = (
   map: maplibregl.Map,
   coords: [number, number][]
@@ -23,7 +27,7 @@ export const fitRoute = (
   map.fitBounds(bounds, {
     padding: 80,
     duration: 800,
-    essential: true,
+    essential: false,
   })
 }
 
@@ -34,6 +38,6 @@ export const fitBoundsOf = (map: maplibregl.Map, bounds: GraphBounds) => {
       [bounds.min_longitude, bounds.min_latitude],
       [bounds.max_longitude, bounds.max_latitude],
     ),
-    { padding: 40, duration: 800, essential: true },
+    { padding: 40, duration: 800, essential: false },
   )
 }
