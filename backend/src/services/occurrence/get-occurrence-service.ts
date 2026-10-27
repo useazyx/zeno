@@ -19,9 +19,10 @@ export class GetOccurrenceService {
             },
             routes: {
               orderBy: { created_at: "desc" }
-            }
+            },
+            used_route: true
           },
-          orderBy: { dispatched_at: "asc" }
+          orderBy: [{ dispatched_at: "desc" }, { id: "desc" }]
         }
       }
     })

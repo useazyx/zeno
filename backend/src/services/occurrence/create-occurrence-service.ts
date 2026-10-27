@@ -2,6 +2,7 @@ import { Occurrence, OccurrenceNature, OccurrencePriority, Prisma } from "../../
 import { prisma } from "../../config/prisma.js";
 import { ConflictError, NotFoundError } from "../../errors/index.js";
 import { eventHub } from "../../realtime/event-hub.js";
+import { recordOccurrenceEvents } from "./occurrence-events.js";
 
 interface CreateOccurrenceRequest {
   nature: OccurrenceNature,
@@ -41,6 +42,12 @@ export class CreateOccurrenceService {
         caller_phone: data.caller_phone ?? null
       }
     })
+
+    await recordOccurrenceEvents([{
+      occurrence_id: occurrence.id,
+      type: "ABERTURA",
+      to_value: occurrence.priority
+    }])
 
     eventHub.publish({
       type: "occurrence.created",

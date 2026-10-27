@@ -1,5 +1,6 @@
 jest.mock("../../../../src/config/prisma.js", () => ({
   prisma: {
+      occurrenceEvent: { createMany: jest.fn() },
     occurrence: { findUnique: jest.fn(), update: jest.fn() },
     dispatch: { findFirst: jest.fn() }
   }

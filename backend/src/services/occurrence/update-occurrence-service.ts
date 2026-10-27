@@ -2,6 +2,7 @@ import { Occurrence, OccurrencePriority, OccurrenceStatus } from "../../generate
 import { prisma } from "../../config/prisma.js";
 import { BadRequestError, ConflictError, NotFoundError } from "../../errors/index.js";
 import { eventHub } from "../../realtime/event-hub.js";
+import { OccurrenceEventInput, recordOccurrenceEvents } from "./occurrence-events.js";
 
 interface UpdateOccurrenceRequest {
   id: string,
@@ -26,7 +27,7 @@ export class UpdateOccurrenceService {
 
     const occurrence = await prisma.occurrence.findUnique({
       where: { id },
-      select: { id: true, status: true, protocol: true }
+      select: { id: true, status: true, protocol: true, priority: true }
     })
 
     if (!occurrence) {
@@ -58,6 +59,18 @@ export class UpdateOccurrenceService {
         ...(status === "ENCERRADA" && { closed_at: new Date() })
       }
     })
+
+    const events: OccurrenceEventInput[] = []
+
+    if (status && status !== occurrence.status) {
+      events.push({ occurrence_id: id, type: "STATUS", from_value: occurrence.status, to_value: status })
+    }
+
+    if (rest.priority && rest.priority !== occurrence.priority) {
+      events.push({ occurrence_id: id, type: "PRIORIDADE", from_value: occurrence.priority, to_value: rest.priority })
+    }
+
+    await recordOccurrenceEvents(events)
 
     if (status && status !== occurrence.status) {
       eventHub.publish({
