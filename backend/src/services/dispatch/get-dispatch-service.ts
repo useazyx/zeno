@@ -20,7 +20,8 @@ export class GetDispatchService {
             }
           }
         },
-        routes: { orderBy: { created_at: "desc" } }
+        routes: { orderBy: { created_at: "desc" } },
+        used_route: true
       }
     })
 

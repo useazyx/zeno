@@ -27,9 +27,11 @@ export class ListDispatchesService {
         include: {
           occurrence: { select: { id: true, protocol: true, nature: true, priority: true, address: true } },
           vehicle: { select: { id: true, prefix: true, type: true } },
-          crew: { select: { id: true, name: true } }
+          crew: { select: { id: true, name: true } },
+          routes: { orderBy: { created_at: "desc" } },
+          used_route: true
         },
-        orderBy: { dispatched_at: "desc" },
+        orderBy: [{ dispatched_at: "desc" }, { id: "desc" }],
         skip: (page - 1) * per_page,
         take: per_page
       }),

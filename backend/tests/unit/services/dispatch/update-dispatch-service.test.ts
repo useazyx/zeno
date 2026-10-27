@@ -8,6 +8,7 @@ jest.mock("../../../../src/config/prisma.js", () => {
   return {
     prisma: {
       dispatch: { findUnique: jest.fn(), findUniqueOrThrow: jest.fn() },
+      occurrenceEvent: { createMany: jest.fn() },
       $transaction: jest.fn(async (fn: any) => fn(tx)),
       __tx: tx
     }
@@ -21,6 +22,7 @@ import { UpdateDispatchService } from "../../../../src/services/dispatch/update-
 
 const mockPrisma = prisma as unknown as {
   dispatch: { findUnique: jest.Mock, findUniqueOrThrow: jest.Mock },
+  occurrenceEvent: { createMany: jest.Mock },
   $transaction: jest.Mock,
   __tx: { dispatch: { update: jest.Mock }, vehicle: { update: jest.Mock }, occurrence: { updateMany: jest.Mock } }
 }
@@ -97,6 +99,22 @@ describe("UpdateDispatchService", () => {
       data: { status: "EM_ATENDIMENTO" }
     })
     expect(mockPrisma.__tx.vehicle.update).not.toHaveBeenCalled()
+  })
+
+  it("logs the arrival and the start of attendance on the timeline", async () => {
+    mockPrisma.dispatch.findUnique.mockResolvedValueOnce({
+      id: "d1", status: "A_CAMINHO", vehicle_id: "v1", occurrence_id: "occ1"
+    })
+    mockPrisma.__tx.dispatch.update.mockResolvedValueOnce({ id: "d1", status: "NO_LOCAL", occurrence_id: "occ1" })
+    mockPrisma.__tx.occurrence.updateMany.mockResolvedValueOnce({ count: 1 })
+
+    await service.execute({ id: "d1", status: "NO_LOCAL" })
+
+    const { data } = mockPrisma.occurrenceEvent.createMany.mock.calls[0][0]
+    expect(data.map((event: any) => [event.type, event.from_value, event.to_value, event.dispatch_id])).toEqual([
+      ["DESPACHO_STATUS", "A_CAMINHO", "NO_LOCAL", "d1"],
+      ["STATUS", "DESPACHADA", "EM_ATENDIMENTO", null],
+    ])
   })
 
   it("publishes a dispatch.updated event with the new status", async () => {

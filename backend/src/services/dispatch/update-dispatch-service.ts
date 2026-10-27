@@ -2,6 +2,7 @@ import { Dispatch, DispatchStatus } from "../../generated/prisma/client.js";
 import { prisma } from "../../config/prisma.js";
 import { BadRequestError, NotFoundError } from "../../errors/index.js";
 import { eventHub } from "../../realtime/event-hub.js";
+import { recordOccurrenceEvents } from "../occurrence/occurrence-events.js";
 
 interface UpdateDispatchRequest {
   id: string,
@@ -41,6 +42,8 @@ export class UpdateDispatchService {
       throw new BadRequestError(`A dispatch cannot go from ${dispatch.status} to ${status}`)
     }
 
+    let occurrenceStarted = false
+
     const updated = await prisma.$transaction(async (tx) => {
       const result = await tx.dispatch.update({
         where: { id },
@@ -62,14 +65,28 @@ export class UpdateDispatchService {
 
       // The first crew to arrive moves the whole occurrence into attendance.
       if (status === "NO_LOCAL") {
-        await tx.occurrence.updateMany({
+        const started = await tx.occurrence.updateMany({
           where: { id: dispatch.occurrence_id, status: "DESPACHADA" },
           data: { status: "EM_ATENDIMENTO" }
         })
+        occurrenceStarted = (started?.count ?? 0) > 0
       }
 
       return result
     })
+
+    await recordOccurrenceEvents([
+      {
+        occurrence_id: dispatch.occurrence_id,
+        dispatch_id: id,
+        type: "DESPACHO_STATUS",
+        from_value: dispatch.status,
+        to_value: status
+      },
+      ...(occurrenceStarted
+        ? [{ occurrence_id: dispatch.occurrence_id, type: "STATUS" as const, from_value: "DESPACHADA", to_value: "EM_ATENDIMENTO" }]
+        : []),
+    ])
 
     eventHub.publish({
       type: "dispatch.updated",
